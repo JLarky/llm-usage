@@ -153,7 +153,9 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
                     <td mix={cellStyle()}>{row.aggressive}</td>
                     <td mix={cellStyle()}>{row.budgetPerDay}</td>
                     <td mix={cellStyle()}>{row.subscription.reportedUsage}</td>
-                    <td mix={cellStyle()}>{row.daysLeft}</td>
+                    <td mix={cellStyle()} title={row.timeTitle}>
+                      {row.daysLeft}
+                    </td>
                   </tr>
                 ))}
               </tbody>
