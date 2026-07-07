@@ -67,12 +67,10 @@ export function budgetPerDay(usedPercent: number, daysLeft: number, cycleDays: n
   if (usedPercent >= 100) return "—";
   if (daysLeft <= 0) return "—";
 
-  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
-  const expectedMax = (dayOfCycle / cycleDays) * 100;
-  const timeProportional = Math.max(0, (expectedMax - usedPercent) / daysLeft);
+  const flatDailyRate = 100 / cycleDays;
   const evenPace = (100 - usedPercent) / daysLeft;
 
-  return `${timeProportional.toFixed(1)}% (${evenPace.toFixed(1)}%)`;
+  return `${flatDailyRate.toFixed(1)}% (${evenPace.toFixed(1)}%)`;
 }
 
 function sortKey(
