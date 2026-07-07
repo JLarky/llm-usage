@@ -1,11 +1,20 @@
 import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
-import type { UsagePlanRow } from "../utils/usage-budget.ts";
+import type { UsagePlanRow, TimeHorizon } from "../utils/usage-budget.ts";
+import { buildProjectionData } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
+import { UsageBar, TimeBar } from "./progress-bar.tsx";
+import { ProjectionChart } from "./projection-chart.tsx";
 
 const FONT_STACK =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+const HORIZONS: { value: TimeHorizon; label: string }[] = [
+  { value: "cycle", label: "Cycle" },
+  { value: "day", label: "Day" },
+  { value: "hour", label: "Hour" },
+];
 
 const columns = [
   "Provider",
@@ -16,8 +25,15 @@ const columns = [
   "Days Left",
 ] as const;
 
-export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
+export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon }>) {
   const rows = handle.props.rows;
+  const horizon = handle.props.horizon;
+  const projection = buildProjectionData(
+    rows.map((r) => r.subscription),
+    new Date(),
+    horizon,
+    30,
+  );
 
   return () => (
     <Document head={<HomeHead />} title="llm-usage">
@@ -95,6 +111,40 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
               Under-budget providers first, then smallest overage. Use conservative ranges before
               aggressive pace.
             </p>
+            <div
+              mix={css({
+                display: "flex",
+                gap: "4px",
+                marginTop: "12px",
+              })}
+            >
+              {HORIZONS.map((h) => {
+                const active = h.value === horizon;
+                const href = h.value === "cycle" ? "/" : `/?horizon=${h.value}`;
+                return (
+                  <a
+                    key={h.value}
+                    href={href}
+                    mix={css({
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      textDecoration: "none",
+                      borderRadius: "6px",
+                      color: active ? "#fff" : "var(--text-secondary)",
+                      background: active ? "var(--brand-blue)" : "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      cursor: "pointer",
+                    })}
+                  >
+                    {h.label}
+                  </a>
+                );
+              })}
+            </div>
           </header>
 
           <div
@@ -147,20 +197,49 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
                         fontWeight: 600,
                       })}
                     >
-                      {row.subscription.emoji} {row.subscription.provider}
+                      <label
+                        htmlFor={`radio-${row.subscription.id}`}
+                        mix={css({
+                          cursor: "pointer",
+                          display: "block",
+                          "&:hover": { opacity: "0.8" },
+                        })}
+                      >
+                        {row.subscription.emoji} {row.subscription.provider}
+                      </label>
                     </td>
-                    <td mix={cellStyle(row.conservative)}>{row.conservative}</td>
-                    <td mix={cellStyle()}>{row.aggressive}</td>
+                    <td mix={cellStyle(row.conservative)}>
+                      <div>{row.conservative}</div>
+                      <UsageBar
+                        usedPercent={row.usedPercent}
+                        target={row.conservativeTarget}
+                        targetLabel="C"
+                        barColor="#5c6166"
+                      />
+                    </td>
+                    <td mix={cellStyle()}>
+                      <div>{row.aggressive}</div>
+                      <UsageBar
+                        usedPercent={row.usedPercent}
+                        target={row.aggressiveTarget}
+                        targetLabel="A"
+                      />
+                    </td>
                     <td mix={cellStyle()}>{row.budgetPerDay}</td>
                     <td mix={cellStyle()}>{row.subscription.reportedUsage}</td>
                     <td mix={cellStyle()} title={row.timeTitle}>
-                      {row.daysLeft}
+                      <div>{row.daysLeft}</div>
+                      <TimeBar
+                        elapsedPercent={row.timeElapsedPercent}
+                        label={row.timeElapsedLabel}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <ProjectionChart data={projection} />
         </div>
       </main>
     </Document>

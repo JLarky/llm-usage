@@ -1,6 +1,8 @@
 import type { UsageCycle } from "../data/usage-types.ts";
 import type { UsageSubscriptionView } from "./usage-subscription-view.ts";
 
+export type TimeHorizon = "cycle" | "day" | "hour";
+
 export type UsagePlanRow = {
   subscription: UsageSubscriptionView;
   conservative: string;
@@ -9,6 +11,25 @@ export type UsagePlanRow = {
   daysLeft: string;
   timeTitle: string;
   sortKey: number;
+  usedPercent: number;
+  conservativeTarget: number | null;
+  aggressiveTarget: number | null;
+  timeElapsedPercent: number;
+  timeElapsedLabel: string;
+};
+
+export type ProjectionSeries = {
+  id: string;
+  label: string;
+  color: string;
+  conservative: number[];
+  aggressive: number[];
+};
+
+export type ProjectionData = {
+  series: ProjectionSeries[];
+  combined: ProjectionSeries | null;
+  days: number;
 };
 
 const TZ = "America/Denver";
@@ -84,12 +105,25 @@ export function conservativeBudget(
   return `overage of ${Math.round(usedPercent - expectedMax)}%`;
 }
 
-export function aggressiveBudget(usedPercent: number, daysLeft: number): string {
+export function aggressiveBudget(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number = 30,
+  horizon: TimeHorizon = "cycle",
+): string {
   if (usedPercent >= 100) return "depleted";
   if (daysLeft <= 0) return `${Math.round(usedPercent)}%`;
 
-  const evenPace = (100 - usedPercent) / daysLeft;
-  const end = Math.min(100, usedPercent + evenPace);
+  let pace: number;
+  if (horizon === "day") {
+    pace = 100 / cycleDays;
+  } else if (horizon === "hour") {
+    pace = 100 / (cycleDays * 24);
+  } else {
+    pace = (100 - usedPercent) / daysLeft;
+  }
+
+  const end = Math.min(100, usedPercent + pace);
   return `${Math.round(usedPercent)}% → ${Math.round(end)}%`;
 }
 
@@ -101,6 +135,111 @@ export function budgetPerDay(usedPercent: number, daysLeft: number, cycleDays: n
   const evenPace = (100 - usedPercent) / daysLeft;
 
   return `${flatDailyRate.toFixed(1)}% (${evenPace.toFixed(1)}%)`;
+}
+
+export function conservativeTargetValue(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number,
+): number | null {
+  if (usedPercent >= 100) return null;
+  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+  return (dayOfCycle / cycleDays) * 100;
+}
+
+export function aggressiveTargetValue(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number,
+  horizon: TimeHorizon = "cycle",
+): number | null {
+  if (usedPercent >= 100) return null;
+  if (daysLeft <= 0) return null;
+  let pace: number;
+  if (horizon === "day") {
+    pace = 100 / cycleDays;
+  } else if (horizon === "hour") {
+    pace = 100 / (cycleDays * 24);
+  } else {
+    pace = (100 - usedPercent) / daysLeft;
+  }
+  return Math.min(100, usedPercent + pace);
+}
+
+const PALETTE = [
+  "#22c55e",
+  "#a855f7",
+  "#eab308",
+  "#3b82f6",
+  "#14b8a6",
+  "#ef4444",
+  "#f97316",
+  "#ec4899",
+];
+
+export function buildProjectionData(
+  subscriptions: UsageSubscriptionView[],
+  now: Date,
+  horizon: TimeHorizon,
+  days: number = 30,
+): ProjectionData {
+  const active = subscriptions.filter((s) => !s.depleted);
+
+  const series: ProjectionSeries[] = active.map((s, i) => {
+    const cycleDays = cycleLengthDays(s.cycle);
+    const dl = daysUntilReset(s.resetsAt, now);
+    const dayOfCycle = Math.max(1, cycleDays - dl);
+
+    const con: number[] = [];
+    const agg: number[] = [];
+
+    for (let d = 0; d <= days; d++) {
+      if (d < dl) {
+        const cycDay = dayOfCycle + d;
+        con.push((cycDay / cycleDays) * 100);
+        const pace =
+          horizon === "day"
+            ? 100 / cycleDays
+            : horizon === "hour"
+              ? 100 / (cycleDays * 24)
+              : (100 - s.usedPercent) / dl;
+        agg.push(Math.min(100, s.usedPercent + d * pace));
+      } else {
+        const daysSinceReset = d - dl;
+        const cyclePos = daysSinceReset % cycleDays;
+        con.push((cyclePos / cycleDays) * 100);
+        const pace = 100 / cycleDays;
+        agg.push(Math.min(100, daysSinceReset * pace));
+      }
+    }
+
+    return {
+      id: s.id,
+      label: `${s.emoji} ${s.provider}`,
+      color: PALETTE[i % PALETTE.length],
+      conservative: con,
+      aggressive: agg,
+    };
+  });
+
+  const combined: ProjectionSeries | null =
+    series.length > 0
+      ? {
+          id: "combined",
+          label: "Combined avg",
+          color: "#2dacf9",
+          conservative: series[0].conservative.map((_, d) => {
+            const sum = series.reduce((a, s) => a + s.conservative[d], 0);
+            return Math.round((sum / series.length) * 10) / 10;
+          }),
+          aggressive: series[0].aggressive.map((_, d) => {
+            const sum = series.reduce((a, s) => a + s.aggressive[d], 0);
+            return Math.round((sum / series.length) * 10) / 10;
+          }),
+        }
+      : null;
+
+  return { series, combined, days };
 }
 
 function sortKey(
@@ -124,15 +263,20 @@ function sortKey(
 export function buildUsagePlanRows(
   subscriptions: UsageSubscriptionView[],
   now = new Date(),
+  horizon: TimeHorizon = "cycle",
 ): UsagePlanRow[] {
   return subscriptions
     .map((subscription) => {
       const daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
       const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
-      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft);
+      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft, cycleDays, horizon);
 
       const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
+
+      const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+      const elapsedPct = Math.round((dayOfCycle / cycleDays) * 1000) / 10;
+      const elapsedLabel = `${dayOfCycle}d / ${cycleDays}d`;
 
       return {
         subscription,
@@ -148,6 +292,16 @@ export function buildUsagePlanRows(
           conservative,
           subscription.depleted,
         ),
+        usedPercent: subscription.usedPercent,
+        conservativeTarget: conservativeTargetValue(subscription.usedPercent, daysLeft, cycleDays),
+        aggressiveTarget: aggressiveTargetValue(
+          subscription.usedPercent,
+          daysLeft,
+          cycleDays,
+          horizon,
+        ),
+        timeElapsedPercent: elapsedPct,
+        timeElapsedLabel: elapsedLabel,
       };
     })
     .sort(
