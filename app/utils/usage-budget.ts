@@ -35,6 +35,25 @@ export type ProjectionData = {
 const TZ = "America/Denver";
 const MS_PER_DAY = 86_400_000;
 
+export function parseTimeShift(shiftParam: string | null): number {
+  if (!shiftParam) return 0;
+  const match = shiftParam.match(/^(-?\d+)([dh])$/);
+  if (!match) return 0;
+  const amount = Number.parseInt(match[1], 10);
+  const unit = match[2];
+  return unit === "d" ? amount * MS_PER_DAY : unit === "h" ? amount * 3_600_000 : 0;
+}
+
+export function formatTimeShift(shiftMs: number): string {
+  if (shiftMs === 0) return "Now";
+  const totalHours = Math.round(shiftMs / 3_600_000);
+  if (totalHours % 24 === 0) {
+    const days = totalHours / 24;
+    return days > 0 ? `+${days}d` : `${days}d`;
+  }
+  return totalHours > 0 ? `+${totalHours}h` : `${totalHours}h`;
+}
+
 export function cycleLengthDays(cycle: UsageCycle): number {
   return cycle === "weekly" ? 7 : 30;
 }
@@ -267,12 +286,40 @@ export function buildUsagePlanRows(
 ): UsagePlanRow[] {
   return subscriptions
     .map((subscription) => {
-      const daysLeft = daysUntilReset(subscription.resetsAt, now);
+      const todayStr = dateStrInTz(now);
+      let resetDateStr = parseResetDate(subscription.resetsAt);
+      let daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
-      const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
-      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft, cycleDays, horizon);
+      let resetHappened = false;
 
-      const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
+      if (daysLeft === 0) {
+        const todayMs = new Date(todayStr + "T00:00:00").getTime();
+        const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
+        if (resetMs <= todayMs) {
+          const cycleMs = cycleDays * MS_PER_DAY;
+          let nextMs = resetMs + cycleMs;
+          while (nextMs <= todayMs) nextMs += cycleMs;
+          const d = new Date(nextMs);
+          resetDateStr = d.toISOString().split("T")[0];
+          daysLeft = Math.round((nextMs - todayMs) / MS_PER_DAY);
+          resetHappened = true;
+        }
+      }
+
+      const nextResetDate = new Date(resetDateStr + "T00:00:00Z");
+      const labelMonth = nextResetDate.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+      const labelDay = nextResetDate.getUTCDate();
+      const resetLabel = `${labelMonth} ${labelDay}`;
+
+      const effectiveUsed = resetHappened ? 0 : subscription.usedPercent;
+      const effectiveDepleted = resetHappened ? false : subscription.depleted;
+
+      const conservative = conservativeBudget(effectiveUsed, daysLeft, cycleDays);
+      const aggressive = aggressiveBudget(effectiveUsed, daysLeft, cycleDays, horizon);
+
+      const timeTitle = resetHappened
+        ? formatTimeUntilReset(daysLeft * 24)
+        : formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
 
       const dayOfCycle = Math.max(1, cycleDays - daysLeft);
       const elapsedPct = Math.round((dayOfCycle / cycleDays) * 1000) / 10;
@@ -282,24 +329,13 @@ export function buildUsagePlanRows(
         subscription,
         conservative,
         aggressive,
-        budgetPerDay: budgetPerDay(subscription.usedPercent, daysLeft, cycleDays),
-        daysLeft: formatDaysLeft(daysLeft, subscription.resetLabel),
+        budgetPerDay: budgetPerDay(effectiveUsed, daysLeft, cycleDays),
+        daysLeft: formatDaysLeft(daysLeft, resetLabel),
         timeTitle,
-        sortKey: sortKey(
-          subscription.usedPercent,
-          daysLeft,
-          cycleDays,
-          conservative,
-          subscription.depleted,
-        ),
-        usedPercent: subscription.usedPercent,
-        conservativeTarget: conservativeTargetValue(subscription.usedPercent, daysLeft, cycleDays),
-        aggressiveTarget: aggressiveTargetValue(
-          subscription.usedPercent,
-          daysLeft,
-          cycleDays,
-          horizon,
-        ),
+        sortKey: sortKey(effectiveUsed, daysLeft, cycleDays, conservative, effectiveDepleted),
+        usedPercent: effectiveUsed,
+        conservativeTarget: conservativeTargetValue(effectiveUsed, daysLeft, cycleDays),
+        aggressiveTarget: aggressiveTargetValue(effectiveUsed, daysLeft, cycleDays, horizon),
         timeElapsedPercent: elapsedPct,
         timeElapsedLabel: elapsedLabel,
       };
