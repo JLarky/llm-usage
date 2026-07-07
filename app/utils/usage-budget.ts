@@ -286,8 +286,31 @@ export function buildUsagePlanRows(
 ): UsagePlanRow[] {
   return subscriptions
     .map((subscription) => {
-      const daysLeft = daysUntilReset(subscription.resetsAt, now);
+      const todayStr = dateStrInTz(now);
+      let resetDateStr = parseResetDate(subscription.resetsAt);
+      let daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
+
+      // If reset is in the past, advance to next cycle
+      if (daysLeft === 0) {
+        const todayMs = new Date(todayStr + "T00:00:00").getTime();
+        const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
+        if (resetMs <= todayMs) {
+          const cycleMs = cycleDays * MS_PER_DAY;
+          let nextMs = resetMs + cycleMs;
+          while (nextMs <= todayMs) nextMs += cycleMs;
+          const d = new Date(nextMs);
+          resetDateStr = d.toISOString().split("T")[0];
+          daysLeft = Math.round((nextMs - todayMs) / MS_PER_DAY);
+        }
+      }
+
+      // Build reset label from the (possibly advanced) reset date
+      const nextResetDate = new Date(resetDateStr + "T00:00:00Z");
+      const labelMonth = nextResetDate.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+      const labelDay = nextResetDate.getUTCDate();
+      const resetLabel = `${labelMonth} ${labelDay}`;
+
       const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
       const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft, cycleDays, horizon);
 
@@ -302,7 +325,7 @@ export function buildUsagePlanRows(
         conservative,
         aggressive,
         budgetPerDay: budgetPerDay(subscription.usedPercent, daysLeft, cycleDays),
-        daysLeft: formatDaysLeft(daysLeft, subscription.resetLabel),
+        daysLeft: formatDaysLeft(daysLeft, resetLabel),
         timeTitle,
         sortKey: sortKey(
           subscription.usedPercent,
