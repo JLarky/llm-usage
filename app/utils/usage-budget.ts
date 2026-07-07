@@ -7,6 +7,7 @@ export type UsagePlanRow = {
   aggressive: string;
   budgetPerDay: string;
   daysLeft: string;
+  timeTitle: string;
   sortKey: number;
 };
 
@@ -35,6 +36,35 @@ export function daysUntilReset(resetsAt: string, now = new Date()): number {
 
 export function formatDaysLeft(days: number, resetLabel: string): string {
   return `${days} until ${resetLabel}`;
+}
+
+function utcOffsetMsAt(date: Date, tz: string): number {
+  const tzStr = date.toLocaleString("sv", { timeZone: tz, hour12: false });
+  const utcStr = date.toLocaleString("sv", { timeZone: "UTC", hour12: false });
+  const tzMs = new Date(tzStr.replace(" ", "T")).getTime();
+  const utcMs = new Date(utcStr.replace(" ", "T")).getTime();
+  return utcMs - tzMs;
+}
+
+function naiveToUtc(naiveIso: string): number {
+  const d = new Date(naiveIso);
+  return d.getTime() + utcOffsetMsAt(d, TZ);
+}
+
+export function hoursUntilReset(resetsAt: string, now = new Date()): number {
+  const resetUtc = naiveToUtc(resetsAt);
+  const diffMs = resetUtc - now.getTime();
+  return Math.max(0, Math.round(diffMs / 3_600_000));
+}
+
+export function formatTimeUntilReset(hours: number): string {
+  if (hours < 48) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = Math.round(hours % 24);
+  if (remainingHours === 0) {
+    return `${days} day${days > 1 ? "s" : ""}`;
+  }
+  return `${days} day${days > 1 ? "s" : ""} and ${remainingHours} hour${remainingHours > 1 ? "s" : ""}`;
 }
 
 export function conservativeBudget(
@@ -104,12 +134,15 @@ export function buildUsagePlanRows(
       const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
       const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft);
 
+      const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
+
       return {
         subscription,
         conservative,
         aggressive,
         budgetPerDay: budgetPerDay(subscription.usedPercent, daysLeft, cycleDays),
         daysLeft: formatDaysLeft(daysLeft, subscription.resetLabel),
+        timeTitle,
         sortKey: sortKey(
           subscription.usedPercent,
           daysLeft,
