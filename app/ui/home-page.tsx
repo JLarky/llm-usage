@@ -5,7 +5,7 @@ import type { UsagePlanRow } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
 
 const FONT_STACK =
-  "'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+  'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 const columns = [
   "Provider",
@@ -178,15 +178,5 @@ function cellStyle(highlight?: string) {
 }
 
 function HomeHead() {
-  return () => (
-    <>
-      <meta name="color-scheme" content="light dark" />
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap"
-      />
-    </>
-  );
+  return () => <meta name="color-scheme" content="light dark" />;
 }
