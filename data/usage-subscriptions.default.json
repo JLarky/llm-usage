@@ -1,0 +1,58 @@
+{
+  "subscriptions": [
+    {
+      "id": "cursor",
+      "provider": "Cursor",
+      "emoji": "🟢",
+      "used": 6,
+      "total": 20,
+      "cycle": "monthly",
+      "resetsAt": "2026-07-11T16:00:00"
+    },
+    {
+      "id": "chatgpt-codex",
+      "provider": "ChatGPT Codex",
+      "emoji": "🟣",
+      "used": 67,
+      "total": 100,
+      "cycle": "weekly",
+      "resetsAt": "2026-07-09T12:00:00"
+    },
+    {
+      "id": "opencode",
+      "provider": "OpenCode",
+      "emoji": "🟡",
+      "used": 22,
+      "total": 100,
+      "cycle": "monthly",
+      "resetsAt": "2026-08-04T12:00:00"
+    },
+    {
+      "id": "claude",
+      "provider": "Claude",
+      "emoji": "🔵",
+      "used": 51,
+      "total": 100,
+      "cycle": "monthly",
+      "resetsAt": "2026-07-31T18:00:00"
+    },
+    {
+      "id": "grok",
+      "provider": "Grok",
+      "emoji": "🟢",
+      "used": 77,
+      "total": 100,
+      "cycle": "weekly",
+      "resetsAt": "2026-07-13T03:00:00"
+    },
+    {
+      "id": "enterprise-codex",
+      "provider": "Enterprise Codex",
+      "emoji": "🔴",
+      "used": 100,
+      "total": 100,
+      "cycle": "monthly",
+      "resetsAt": "2026-08-01T12:00:00"
+    }
+  ]
+}
