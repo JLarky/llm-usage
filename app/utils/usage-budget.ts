@@ -1,6 +1,8 @@
 import type { UsageCycle } from "../data/usage-types.ts";
 import type { UsageSubscriptionView } from "./usage-subscription-view.ts";
 
+export type TimeHorizon = "cycle" | "day" | "hour";
+
 export type UsagePlanRow = {
   subscription: UsageSubscriptionView;
   conservative: string;
@@ -84,12 +86,25 @@ export function conservativeBudget(
   return `overage of ${Math.round(usedPercent - expectedMax)}%`;
 }
 
-export function aggressiveBudget(usedPercent: number, daysLeft: number): string {
+export function aggressiveBudget(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number = 30,
+  horizon: TimeHorizon = "cycle",
+): string {
   if (usedPercent >= 100) return "depleted";
   if (daysLeft <= 0) return `${Math.round(usedPercent)}%`;
 
-  const evenPace = (100 - usedPercent) / daysLeft;
-  const end = Math.min(100, usedPercent + evenPace);
+  let pace: number;
+  if (horizon === "day") {
+    pace = 100 / cycleDays;
+  } else if (horizon === "hour") {
+    pace = 100 / (cycleDays * 24);
+  } else {
+    pace = (100 - usedPercent) / daysLeft;
+  }
+
+  const end = Math.min(100, usedPercent + pace);
   return `${Math.round(usedPercent)}% → ${Math.round(end)}%`;
 }
 
@@ -126,13 +141,14 @@ function sortKey(
 export function buildUsagePlanRows(
   subscriptions: UsageSubscriptionView[],
   now = new Date(),
+  horizon: TimeHorizon = "cycle",
 ): UsagePlanRow[] {
   return subscriptions
     .map((subscription) => {
       const daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
       const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
-      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft);
+      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft, cycleDays, horizon);
 
       const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
 

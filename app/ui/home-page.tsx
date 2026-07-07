@@ -1,11 +1,17 @@
 import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
-import type { UsagePlanRow } from "../utils/usage-budget.ts";
+import type { UsagePlanRow, TimeHorizon } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
 
 const FONT_STACK =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+const HORIZONS: { value: TimeHorizon; label: string }[] = [
+  { value: "cycle", label: "Cycle" },
+  { value: "day", label: "Day" },
+  { value: "hour", label: "Hour" },
+];
 
 const columns = [
   "Provider",
@@ -16,8 +22,9 @@ const columns = [
   "Days Left",
 ] as const;
 
-export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
+export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon }>) {
   const rows = handle.props.rows;
+  const horizon = handle.props.horizon;
 
   return () => (
     <Document head={<HomeHead />} title="llm-usage">
@@ -95,6 +102,40 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[] }>) {
               Under-budget providers first, then smallest overage. Use conservative ranges before
               aggressive pace.
             </p>
+            <div
+              mix={css({
+                display: "flex",
+                gap: "4px",
+                marginTop: "12px",
+              })}
+            >
+              {HORIZONS.map((h) => {
+                const active = h.value === horizon;
+                const href = h.value === "cycle" ? "/" : `/?horizon=${h.value}`;
+                return (
+                  <a
+                    key={h.value}
+                    href={href}
+                    mix={css({
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      textDecoration: "none",
+                      borderRadius: "6px",
+                      color: active ? "#fff" : "var(--text-secondary)",
+                      background: active ? "var(--brand-blue)" : "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      cursor: "pointer",
+                    })}
+                  >
+                    {h.label}
+                  </a>
+                );
+              })}
+            </div>
           </header>
 
           <div
