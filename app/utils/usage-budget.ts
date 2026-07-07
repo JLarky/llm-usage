@@ -290,8 +290,8 @@ export function buildUsagePlanRows(
       let resetDateStr = parseResetDate(subscription.resetsAt);
       let daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
+      let resetHappened = false;
 
-      // If reset is in the past, advance to next cycle
       if (daysLeft === 0) {
         const todayMs = new Date(todayStr + "T00:00:00").getTime();
         const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
@@ -302,19 +302,24 @@ export function buildUsagePlanRows(
           const d = new Date(nextMs);
           resetDateStr = d.toISOString().split("T")[0];
           daysLeft = Math.round((nextMs - todayMs) / MS_PER_DAY);
+          resetHappened = true;
         }
       }
 
-      // Build reset label from the (possibly advanced) reset date
       const nextResetDate = new Date(resetDateStr + "T00:00:00Z");
       const labelMonth = nextResetDate.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
       const labelDay = nextResetDate.getUTCDate();
       const resetLabel = `${labelMonth} ${labelDay}`;
 
-      const conservative = conservativeBudget(subscription.usedPercent, daysLeft, cycleDays);
-      const aggressive = aggressiveBudget(subscription.usedPercent, daysLeft, cycleDays, horizon);
+      const effectiveUsed = resetHappened ? 0 : subscription.usedPercent;
+      const effectiveDepleted = resetHappened ? false : subscription.depleted;
 
-      const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
+      const conservative = conservativeBudget(effectiveUsed, daysLeft, cycleDays);
+      const aggressive = aggressiveBudget(effectiveUsed, daysLeft, cycleDays, horizon);
+
+      const timeTitle = resetHappened
+        ? formatTimeUntilReset(daysLeft * 24)
+        : formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
 
       const dayOfCycle = Math.max(1, cycleDays - daysLeft);
       const elapsedPct = Math.round((dayOfCycle / cycleDays) * 1000) / 10;
@@ -324,24 +329,13 @@ export function buildUsagePlanRows(
         subscription,
         conservative,
         aggressive,
-        budgetPerDay: budgetPerDay(subscription.usedPercent, daysLeft, cycleDays),
+        budgetPerDay: budgetPerDay(effectiveUsed, daysLeft, cycleDays),
         daysLeft: formatDaysLeft(daysLeft, resetLabel),
         timeTitle,
-        sortKey: sortKey(
-          subscription.usedPercent,
-          daysLeft,
-          cycleDays,
-          conservative,
-          subscription.depleted,
-        ),
-        usedPercent: subscription.usedPercent,
-        conservativeTarget: conservativeTargetValue(subscription.usedPercent, daysLeft, cycleDays),
-        aggressiveTarget: aggressiveTargetValue(
-          subscription.usedPercent,
-          daysLeft,
-          cycleDays,
-          horizon,
-        ),
+        sortKey: sortKey(effectiveUsed, daysLeft, cycleDays, conservative, effectiveDepleted),
+        usedPercent: effectiveUsed,
+        conservativeTarget: conservativeTargetValue(effectiveUsed, daysLeft, cycleDays),
+        aggressiveTarget: aggressiveTargetValue(effectiveUsed, daysLeft, cycleDays, horizon),
         timeElapsedPercent: elapsedPct,
         timeElapsedLabel: elapsedLabel,
       };
