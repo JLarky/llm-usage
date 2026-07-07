@@ -16,11 +16,17 @@ export type UsagePlanRow = {
   aggressiveTarget: number | null;
 };
 
-export type ProjectionPoint = {
-  day: number;
+export type ProjectionSeries = {
+  id: string;
   label: string;
-  totalConservative: number;
-  totalAggressive: number;
+  color: string;
+  conservative: number[];
+  aggressive: number[];
+};
+
+export type ProjectionData = {
+  series: ProjectionSeries[];
+  days: number;
 };
 
 const TZ = "America/Denver";
@@ -157,57 +163,63 @@ export function aggressiveTargetValue(
   return Math.min(100, usedPercent + pace);
 }
 
+const PALETTE = [
+  "#22c55e",
+  "#a855f7",
+  "#eab308",
+  "#3b82f6",
+  "#14b8a6",
+  "#ef4444",
+  "#f97316",
+  "#ec4899",
+];
+
 export function buildProjectionData(
   subscriptions: UsageSubscriptionView[],
   now: Date,
   horizon: TimeHorizon,
   days: number = 30,
-): ProjectionPoint[] {
+): ProjectionData {
   const active = subscriptions.filter((s) => !s.depleted);
-  if (active.length === 0) return [];
 
-  const rows = active.map((s) => {
+  const series: ProjectionSeries[] = active.map((s, i) => {
     const cycleDays = cycleLengthDays(s.cycle);
     const dl = daysUntilReset(s.resetsAt, now);
     const dayOfCycle = Math.max(1, cycleDays - dl);
-    return { s, cycleDays, dl, dayOfCycle };
-  });
 
-  const out: ProjectionPoint[] = [];
-  for (let d = 0; d <= days; d++) {
-    let totalCon = 0;
-    let totalAgg = 0;
+    const con: number[] = [];
+    const agg: number[] = [];
 
-    for (const r of rows) {
-      if (d < r.dl) {
-        const cycDay = r.dayOfCycle + d;
-        totalCon += (cycDay / r.cycleDays) * 100;
+    for (let d = 0; d <= days; d++) {
+      if (d < dl) {
+        const cycDay = dayOfCycle + d;
+        con.push((cycDay / cycleDays) * 100);
         const pace =
           horizon === "day"
-            ? 100 / r.cycleDays
+            ? 100 / cycleDays
             : horizon === "hour"
-              ? 100 / (r.cycleDays * 24)
-              : (100 - r.s.usedPercent) / r.dl;
-        totalAgg += Math.min(100, r.s.usedPercent + d * pace);
+              ? 100 / (cycleDays * 24)
+              : (100 - s.usedPercent) / dl;
+        agg.push(Math.min(100, s.usedPercent + d * pace));
       } else {
-        const daysSinceReset = d - r.dl;
-        const cyclePos = daysSinceReset % r.cycleDays;
-        totalCon += (cyclePos / r.cycleDays) * 100;
-        const pace = 100 / r.cycleDays;
-        totalAgg += Math.min(100, daysSinceReset * pace);
+        const daysSinceReset = d - dl;
+        const cyclePos = daysSinceReset % cycleDays;
+        con.push((cyclePos / cycleDays) * 100);
+        const pace = 100 / cycleDays;
+        agg.push(Math.min(100, daysSinceReset * pace));
       }
     }
 
-    const count = rows.length;
-    out.push({
-      day: d,
-      label: d === 0 ? "now" : `+${d}d`,
-      totalConservative: Math.round((totalCon / count) * 10) / 10,
-      totalAggressive: Math.round((totalAgg / count) * 10) / 10,
-    });
-  }
+    return {
+      id: s.id,
+      label: `${s.emoji} ${s.provider}`,
+      color: PALETTE[i % PALETTE.length],
+      conservative: con,
+      aggressive: agg,
+    };
+  });
 
-  return out;
+  return { series, days };
 }
 
 function sortKey(

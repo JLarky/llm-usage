@@ -1,43 +1,34 @@
 import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
-import type { ProjectionPoint } from "../utils/usage-budget.ts";
+import type { ProjectionData } from "../utils/usage-budget.ts";
 
 const W = 600;
-const H = 240;
-const PAD = { top: 20, right: 20, bottom: 30, left: 40 };
+const H = 260;
+const PAD = { top: 20, right: 60, bottom: 30, left: 40 };
 const PW = W - PAD.left - PAD.right;
 const PH = H - PAD.top - PAD.bottom;
 
-export function ProjectionChart(handle: Handle<{ data: ProjectionPoint[] }>) {
+export function ProjectionChart(handle: Handle<{ data: ProjectionData }>) {
   return () => {
-    const data = handle.props.data;
-    if (data.length < 2) return null;
+    const { series, days } = handle.props.data;
+    if (series.length === 0) return null;
+    const xMax = days;
 
-    const maxVal = Math.max(
-      100,
-      ...data.map((d) => Math.max(d.totalConservative, d.totalAggressive)),
-    );
+    const allValues = series.flatMap((s) => [...s.conservative, ...s.aggressive]);
+    const maxVal = Math.max(100, ...allValues);
     const yMax = Math.ceil(maxVal / 10) * 10;
-    const xMax = data.length - 1;
 
     const xScale = (d: number) => PAD.left + (d / xMax) * PW;
     const yScale = (v: number) => PAD.top + PH - (v / yMax) * PH;
 
-    const conPoints = data.map((d) => `${xScale(d.day)},${yScale(d.totalConservative)}`).join(" ");
-    const aggPoints = data.map((d) => `${xScale(d.day)},${yScale(d.totalAggressive)}`).join(" ");
-
     const yTicks: number[] = [];
     for (let v = 0; v <= yMax; v += 10) yTicks.push(v);
 
-    const xLabels: { day: number; label: string }[] = [];
+    const xTickDays: number[] = [];
     const step = Math.max(1, Math.floor(xMax / 6));
-    for (let d = 0; d <= xMax; d += step) {
-      xLabels.push(data[d] ?? data[data.length - 1]);
-    }
-    if (xLabels.length === 0 || xLabels[xLabels.length - 1].day < xMax) {
-      xLabels.push(data[data.length - 1]);
-    }
+    for (let d = 0; d <= xMax; d += step) xTickDays.push(d);
+    if (xTickDays.length === 0 || xTickDays[xTickDays.length - 1] < xMax) xTickDays.push(xMax);
 
     return (
       <div
@@ -66,8 +57,6 @@ export function ProjectionChart(handle: Handle<{ data: ProjectionPoint[] }>) {
             width: "100%",
             height: "auto",
             display: "block",
-            "--chart-line-con": "#2dacf9",
-            "--chart-line-agg": "#c77700",
           })}
         >
           {/* Grid */}
@@ -94,78 +83,63 @@ export function ProjectionChart(handle: Handle<{ data: ProjectionPoint[] }>) {
           ))}
 
           {/* X labels */}
-          {xLabels.map((d) => (
+          {xTickDays.map((d) => (
             <text
-              key={d.day}
-              x={xScale(d.day)}
+              key={d}
+              x={xScale(d)}
               y={H - PAD.bottom + 18}
               textAnchor="middle"
               fill="var(--text-tertiary)"
               fontSize="11"
             >
-              {d.label}
+              {d === 0 ? "now" : `+${d}d`}
             </text>
           ))}
 
-          {/* Data */}
-          <polyline
-            points={aggPoints}
-            fill="none"
-            stroke="var(--chart-line-agg)"
-            strokeWidth="2"
-            strokeDasharray="4 3"
-          />
-          <polyline points={conPoints} fill="none" stroke="var(--chart-line-con)" strokeWidth="2" />
-
-          {/* Start dots */}
-          <circle
-            cx={xScale(0)}
-            cy={yScale(data[0].totalAggressive)}
-            r="3"
-            fill="var(--chart-line-agg)"
-          />
-          <circle
-            cx={xScale(0)}
-            cy={yScale(data[0].totalConservative)}
-            r="3"
-            fill="var(--chart-line-con)"
-          />
+          {/* Series lines */}
+          {series.map((s) => {
+            const conPts = s.conservative.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ");
+            const aggPts = s.aggressive.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ");
+            return (
+              <g key={s.id}>
+                <polyline points={conPts} fill="none" stroke={s.color} strokeWidth="2" />
+                <polyline
+                  points={aggPts}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="2"
+                  strokeDasharray="4 3"
+                />
+                <circle cx={xScale(0)} cy={yScale(s.conservative[0])} r="3" fill={s.color} />
+              </g>
+            );
+          })}
         </svg>
         <div
           mix={css({
             display: "flex",
-            gap: "16px",
+            flexWrap: "wrap",
+            gap: "8px 16px",
             marginTop: "8px",
             fontSize: "11px",
             color: "var(--text-secondary)",
           })}
         >
-          <span>
-            <span
-              mix={css({
-                display: "inline-block",
-                width: "12px",
-                height: "3px",
-                background: "var(--chart-line-con)",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              })}
-            />
-            Conservative
-          </span>
-          <span>
-            <span
-              mix={css({
-                display: "inline-block",
-                width: "12px",
-                height: "3px",
-                background: "var(--chart-line-agg)",
-                marginRight: "4px",
-                verticalAlign: "middle",
-              })}
-            />
-            Aggressive
-          </span>
+          {series.map((s) => (
+            <span key={s.id}>
+              <span
+                mix={css({
+                  display: "inline-block",
+                  width: "12px",
+                  height: "3px",
+                  background: s.color,
+                  marginRight: "4px",
+                  verticalAlign: "middle",
+                })}
+              />
+              {s.label}
+            </span>
+          ))}
         </div>
       </div>
     );

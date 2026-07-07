@@ -28,7 +28,7 @@ const columns = [
 export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon }>) {
   const rows = handle.props.rows;
   const horizon = handle.props.horizon;
-  const projectionData = buildProjectionData(
+  const projection = buildProjectionData(
     rows.map((r) => r.subscription),
     new Date(),
     horizon,
@@ -225,7 +225,7 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
               </tbody>
             </table>
           </div>
-          <ProjectionChart data={projectionData} />
+          <ProjectionChart data={projection} />
         </div>
       </main>
     </Document>
