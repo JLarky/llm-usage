@@ -4,7 +4,7 @@ import { css } from "remix/ui";
 import type { UsagePlanRow, TimeHorizon } from "../utils/usage-budget.ts";
 import { buildProjectionData } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
-import { ProgressBar } from "./progress-bar.tsx";
+import { UsageBar, TimeBar } from "./progress-bar.tsx";
 import { ProjectionChart } from "./projection-chart.tsx";
 
 const FONT_STACK =
@@ -210,24 +210,29 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
                     </td>
                     <td mix={cellStyle(row.conservative)}>
                       <div>{row.conservative}</div>
-                      <ProgressBar
+                      <UsageBar
                         usedPercent={row.usedPercent}
-                        conservativeTarget={row.conservativeTarget}
-                        aggressiveTarget={row.aggressiveTarget}
+                        target={row.conservativeTarget}
+                        targetLabel="C"
+                        barColor="#5c6166"
                       />
                     </td>
                     <td mix={cellStyle()}>
                       <div>{row.aggressive}</div>
-                      <ProgressBar
+                      <UsageBar
                         usedPercent={row.usedPercent}
-                        conservativeTarget={row.conservativeTarget}
-                        aggressiveTarget={row.aggressiveTarget}
+                        target={row.aggressiveTarget}
+                        targetLabel="A"
                       />
                     </td>
                     <td mix={cellStyle()}>{row.budgetPerDay}</td>
                     <td mix={cellStyle()}>{row.subscription.reportedUsage}</td>
                     <td mix={cellStyle()} title={row.timeTitle}>
-                      {row.daysLeft}
+                      <div>{row.daysLeft}</div>
+                      <TimeBar
+                        elapsedPercent={row.timeElapsedPercent}
+                        label={row.timeElapsedLabel}
+                      />
                     </td>
                   </tr>
                 ))}

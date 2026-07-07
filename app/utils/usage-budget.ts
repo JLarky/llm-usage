@@ -14,6 +14,8 @@ export type UsagePlanRow = {
   usedPercent: number;
   conservativeTarget: number | null;
   aggressiveTarget: number | null;
+  timeElapsedPercent: number;
+  timeElapsedLabel: string;
 };
 
 export type ProjectionSeries = {
@@ -272,6 +274,10 @@ export function buildUsagePlanRows(
 
       const timeTitle = formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
 
+      const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+      const elapsedPct = Math.round((dayOfCycle / cycleDays) * 1000) / 10;
+      const elapsedLabel = `${dayOfCycle}d / ${cycleDays}d`;
+
       return {
         subscription,
         conservative,
@@ -294,6 +300,8 @@ export function buildUsagePlanRows(
           cycleDays,
           horizon,
         ),
+        timeElapsedPercent: elapsedPct,
+        timeElapsedLabel: elapsedLabel,
       };
     })
     .sort(

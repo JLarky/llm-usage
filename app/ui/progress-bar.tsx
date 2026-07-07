@@ -1,13 +1,10 @@
 import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
-export function ProgressBar(handle: Handle<ProgressBarProps>) {
+export function UsageBar(handle: Handle<UsageBarProps>) {
   return () => {
-    const { usedPercent, conservativeTarget, aggressiveTarget } = handle.props;
+    const { usedPercent, target, targetLabel, barColor } = handle.props;
     const fill = Math.min(100, usedPercent);
-    const isOverage = conservativeTarget != null && usedPercent > conservativeTarget;
-    const isDepleted = usedPercent >= 100;
-    const barColor = isDepleted ? "#d14343" : isOverage ? "#c77700" : "#2dacf9";
 
     return (
       <div
@@ -26,22 +23,72 @@ export function ProgressBar(handle: Handle<ProgressBarProps>) {
           mix={css({
             height: "100%",
             width: `${fill}%`,
-            background: barColor,
+            background: barColor ?? "#2dacf9",
             borderRadius: "4px",
             transition: "width 0.3s ease",
           })}
         />
-        {conservativeTarget != null && renderMarker(conservativeTarget, "#5c6166", "C")}
-        {aggressiveTarget != null && renderMarker(aggressiveTarget, "#94989c", "A")}
+        {target != null && renderMarker(target, barColor ?? "#2dacf9", targetLabel)}
       </div>
     );
   };
 }
 
-type ProgressBarProps = {
+type UsageBarProps = {
   usedPercent: number;
-  conservativeTarget: number | null;
-  aggressiveTarget: number | null;
+  target: number | null;
+  targetLabel: string;
+  barColor?: string;
+};
+
+export function TimeBar(handle: Handle<TimeBarProps>) {
+  return () => {
+    const { elapsedPercent, label } = handle.props;
+    const fill = Math.min(100, Math.max(0, elapsedPercent));
+
+    return (
+      <div
+        mix={css({
+          position: "relative",
+          height: "8px",
+          width: "100%",
+          minWidth: "100px",
+          background: "var(--border)",
+          borderRadius: "4px",
+          overflow: "visible",
+          marginTop: "4px",
+        })}
+      >
+        <div
+          mix={css({
+            height: "100%",
+            width: `${fill}%`,
+            background: "var(--text-tertiary)",
+            borderRadius: "4px",
+            opacity: "0.5",
+            transition: "width 0.3s ease",
+          })}
+        />
+        <span
+          mix={css({
+            position: "absolute",
+            right: "4px",
+            top: "-1px",
+            fontSize: "9px",
+            color: "var(--text-tertiary)",
+            lineHeight: "10px",
+          })}
+        >
+          {label}
+        </span>
+      </div>
+    );
+  };
+}
+
+type TimeBarProps = {
+  elapsedPercent: number;
+  label: string;
 };
 
 function renderMarker(position: number, color: string, label: string) {
