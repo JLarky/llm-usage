@@ -197,7 +197,16 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
                         fontWeight: 600,
                       })}
                     >
-                      {row.subscription.emoji} {row.subscription.provider}
+                      <label
+                        htmlFor={`radio-${row.subscription.id}`}
+                        mix={css({
+                          cursor: "pointer",
+                          display: "block",
+                          "&:hover": { opacity: "0.8" },
+                        })}
+                      >
+                        {row.subscription.emoji} {row.subscription.provider}
+                      </label>
                     </td>
                     <td mix={cellStyle(row.conservative)}>
                       <div>{row.conservative}</div>

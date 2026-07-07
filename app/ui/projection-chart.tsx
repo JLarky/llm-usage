@@ -11,11 +11,12 @@ const PH = H - PAD.top - PAD.bottom;
 
 export function ProjectionChart(handle: Handle<{ data: ProjectionData }>) {
   return () => {
-    const { series, days } = handle.props.data;
+    const { series, combined, days } = handle.props.data;
     if (series.length === 0) return null;
     const xMax = days;
 
     const allValues = series.flatMap((s) => [...s.conservative, ...s.aggressive]);
+    if (combined) allValues.push(...combined.conservative, ...combined.aggressive);
     const maxVal = Math.max(100, ...allValues);
     const yMax = Math.ceil(maxVal / 10) * 10;
 
@@ -28,18 +29,51 @@ export function ProjectionChart(handle: Handle<{ data: ProjectionData }>) {
     const xTickDays: number[] = [];
     const step = Math.max(1, Math.floor(xMax / 6));
     for (let d = 0; d <= xMax; d += step) xTickDays.push(d);
-    if (xTickDays.length === 0 || xTickDays[xTickDays.length - 1] < xMax) xTickDays.push(xMax);
+    if (xTickDays[xTickDays.length - 1] < xMax) xTickDays.push(xMax);
 
     return (
       <div
+        id="chart"
         mix={css({
           marginTop: "20px",
           border: "1px solid var(--border)",
           borderRadius: "12px",
           background: "var(--surface-3)",
           padding: "16px",
+          // radio-toggle chart visibility
+          "& .series-provider": { display: "none" },
+          "& .legend-provider": { opacity: "0.3" },
+          "&:has(#radio-all:checked) .series-combined": { display: "block" },
+          "&:has(#radio-all:checked) .legend-combined": { opacity: "1" },
+          ...Object.fromEntries(
+            series.map((s) => [
+              `&:has(#radio-${s.id}:checked) .series-${s.id}`,
+              { display: "block" },
+            ]),
+          ),
+          ...Object.fromEntries(
+            series.map((s) => [`&:has(#radio-${s.id}:checked) .legend-${s.id}`, { opacity: "1" }]),
+          ),
         })}
       >
+        {/* Hidden radio inputs for CSS-only toggle */}
+        <input
+          type="radio"
+          name="chart-view"
+          id="radio-all"
+          defaultChecked
+          mix={css({ display: "none" })}
+        />
+        {series.map((s) => (
+          <input
+            key={s.id}
+            type="radio"
+            name="chart-view"
+            id={`radio-${s.id}`}
+            mix={css({ display: "none" })}
+          />
+        ))}
+
         <h2
           mix={css({
             margin: "0 0 8px",
@@ -96,24 +130,50 @@ export function ProjectionChart(handle: Handle<{ data: ProjectionData }>) {
             </text>
           ))}
 
-          {/* Series lines */}
-          {series.map((s) => {
-            const conPts = s.conservative.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ");
-            const aggPts = s.aggressive.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ");
-            return (
-              <g key={s.id}>
-                <polyline points={conPts} fill="none" stroke={s.color} strokeWidth="2" />
-                <polyline
-                  points={aggPts}
-                  fill="none"
-                  stroke={s.color}
-                  strokeWidth="2"
-                  strokeDasharray="4 3"
-                />
-                <circle cx={xScale(0)} cy={yScale(s.conservative[0])} r="3" fill={s.color} />
-              </g>
-            );
-          })}
+          {/* Combined series */}
+          {combined && (
+            <g class="series-group series-combined">
+              <polyline
+                points={combined.conservative.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ")}
+                fill="none"
+                stroke={combined.color}
+                strokeWidth="2"
+              />
+              <polyline
+                points={combined.aggressive.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ")}
+                fill="none"
+                stroke={combined.color}
+                strokeWidth="2"
+                strokeDasharray="4 3"
+              />
+              <circle
+                cx={xScale(0)}
+                cy={yScale(combined.conservative[0])}
+                r="3"
+                fill={combined.color}
+              />
+            </g>
+          )}
+
+          {/* Per-provider series */}
+          {series.map((s) => (
+            <g key={s.id} class={`series-group series-provider series-${s.id}`}>
+              <polyline
+                points={s.conservative.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ")}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="2"
+              />
+              <polyline
+                points={s.aggressive.map((v, d) => `${xScale(d)},${yScale(v)}`).join(" ")}
+                fill="none"
+                stroke={s.color}
+                strokeWidth="2"
+                strokeDasharray="4 3"
+              />
+              <circle cx={xScale(0)} cy={yScale(s.conservative[0])} r="3" fill={s.color} />
+            </g>
+          ))}
         </svg>
         <div
           mix={css({
@@ -125,8 +185,23 @@ export function ProjectionChart(handle: Handle<{ data: ProjectionData }>) {
             color: "var(--text-secondary)",
           })}
         >
+          {combined && (
+            <span class="legend-item legend-combined">
+              <span
+                mix={css({
+                  display: "inline-block",
+                  width: "12px",
+                  height: "3px",
+                  background: combined.color,
+                  marginRight: "4px",
+                  verticalAlign: "middle",
+                })}
+              />
+              {combined.label}
+            </span>
+          )}
           {series.map((s) => (
-            <span key={s.id}>
+            <span key={s.id} class={`legend-item legend-provider legend-${s.id}`}>
               <span
                 mix={css({
                   display: "inline-block",

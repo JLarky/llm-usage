@@ -26,6 +26,7 @@ export type ProjectionSeries = {
 
 export type ProjectionData = {
   series: ProjectionSeries[];
+  combined: ProjectionSeries | null;
   days: number;
 };
 
@@ -219,7 +220,24 @@ export function buildProjectionData(
     };
   });
 
-  return { series, days };
+  const combined: ProjectionSeries | null =
+    series.length > 0
+      ? {
+          id: "combined",
+          label: "Combined avg",
+          color: "#2dacf9",
+          conservative: series[0].conservative.map((_, d) => {
+            const sum = series.reduce((a, s) => a + s.conservative[d], 0);
+            return Math.round((sum / series.length) * 10) / 10;
+          }),
+          aggressive: series[0].aggressive.map((_, d) => {
+            const sum = series.reduce((a, s) => a + s.aggressive[d], 0);
+            return Math.round((sum / series.length) * 10) / 10;
+          }),
+        }
+      : null;
+
+  return { series, combined, days };
 }
 
 function sortKey(
