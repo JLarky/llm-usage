@@ -1,0 +1,5 @@
+node_modules/
+.output/
+db/*.sqlite
+tmp/
+.DS_Store
