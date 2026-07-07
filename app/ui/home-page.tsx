@@ -2,10 +2,14 @@ import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
 import type { UsagePlanRow, TimeHorizon } from "../utils/usage-budget.ts";
-import { buildProjectionData } from "../utils/usage-budget.ts";
+import { buildProjectionData, formatTimeShift } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
 import { UsageBar, TimeBar } from "./progress-bar.tsx";
 import { ProjectionChart } from "./projection-chart.tsx";
+
+const MS_1H = 3_600_000;
+const MS_6H = 6 * MS_1H;
+const MS_1D = 24 * MS_1H;
 
 const FONT_STACK =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -25,12 +29,16 @@ const columns = [
   "Days Left",
 ] as const;
 
-export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon }>) {
+export function HomePage(
+  handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon; now: Date; shiftMs: number }>,
+) {
   const rows = handle.props.rows;
   const horizon = handle.props.horizon;
+  const now = handle.props.now;
+  const shiftMs = handle.props.shiftMs;
   const projection = buildProjectionData(
     rows.map((r) => r.subscription),
-    new Date(),
+    now,
     horizon,
     30,
   );
@@ -120,7 +128,8 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
             >
               {HORIZONS.map((h) => {
                 const active = h.value === horizon;
-                const href = h.value === "cycle" ? "/" : `/?horizon=${h.value}`;
+                const href =
+                  h.value === "cycle" ? buildUrl(shiftMs, "") : buildUrl(shiftMs, h.value);
                 return (
                   <a
                     key={h.value}
@@ -144,6 +153,48 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
                   </a>
                 );
               })}
+            </div>
+            <div
+              mix={css({
+                display: "flex",
+                gap: "4px",
+                marginTop: "8px",
+                alignItems: "center",
+              })}
+            >
+              {SHIFT_STEPS.map((step) => {
+                const newShift = shiftMs + step.ms;
+                const active = step.ms === 0 && shiftMs === 0;
+                return (
+                  <a
+                    key={step.label}
+                    href={buildUrl(newShift, horizon)}
+                    mix={css({
+                      display: "inline-block",
+                      padding: "3px 8px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                      borderRadius: "4px",
+                      color: active ? "#fff" : "var(--text-secondary)",
+                      background: active ? "var(--brand-blue)" : "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      cursor: "pointer",
+                    })}
+                  >
+                    {step.label}
+                  </a>
+                );
+              })}
+              <span
+                mix={css({
+                  fontSize: "11px",
+                  color: "var(--text-tertiary)",
+                  marginLeft: "4px",
+                })}
+              >
+                {formatTimeShift(shiftMs)}
+              </span>
             </div>
           </header>
 
@@ -244,6 +295,27 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
       </main>
     </Document>
   );
+}
+
+const SHIFT_STEPS = [
+  { ms: -MS_1D, label: "-1d" },
+  { ms: -MS_6H, label: "-6h" },
+  { ms: -MS_1H, label: "-1h" },
+  { ms: 0, label: "Now" },
+  { ms: MS_1H, label: "+1h" },
+  { ms: MS_6H, label: "+6h" },
+  { ms: MS_1D, label: "+1d" },
+];
+
+function buildUrl(shiftMs: number, horizon: string): string {
+  const params = new URLSearchParams();
+  if (horizon && horizon !== "cycle") params.set("horizon", horizon);
+  if (shiftMs !== 0) {
+    const shiftStr = shiftMs % MS_1D === 0 ? `${shiftMs / MS_1D}d` : `${shiftMs / MS_1H}h`;
+    params.set("shift", shiftStr);
+  }
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
 }
 
 function cellStyle(highlight?: string) {
