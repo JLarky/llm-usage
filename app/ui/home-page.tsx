@@ -163,8 +163,9 @@ export function HomePage(
               })}
             >
               {SHIFT_STEPS.map((step) => {
-                const newShift = shiftMs + step.ms;
-                const active = step.ms === 0 && shiftMs === 0;
+                const isNow = step.label === "Now";
+                const newShift = isNow ? 0 : shiftMs + step.ms;
+                const active = isNow && shiftMs === 0;
                 return (
                   <a
                     key={step.label}
