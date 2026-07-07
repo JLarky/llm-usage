@@ -11,6 +11,16 @@ export type UsagePlanRow = {
   daysLeft: string;
   timeTitle: string;
   sortKey: number;
+  usedPercent: number;
+  conservativeTarget: number | null;
+  aggressiveTarget: number | null;
+};
+
+export type ProjectionPoint = {
+  day: number;
+  label: string;
+  totalConservative: number;
+  totalAggressive: number;
 };
 
 const TZ = "America/Denver";
@@ -118,6 +128,88 @@ export function budgetPerDay(usedPercent: number, daysLeft: number, cycleDays: n
   return `${flatDailyRate.toFixed(1)}% (${evenPace.toFixed(1)}%)`;
 }
 
+export function conservativeTargetValue(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number,
+): number | null {
+  if (usedPercent >= 100) return null;
+  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+  return (dayOfCycle / cycleDays) * 100;
+}
+
+export function aggressiveTargetValue(
+  usedPercent: number,
+  daysLeft: number,
+  cycleDays: number,
+  horizon: TimeHorizon = "cycle",
+): number | null {
+  if (usedPercent >= 100) return null;
+  if (daysLeft <= 0) return null;
+  let pace: number;
+  if (horizon === "day") {
+    pace = 100 / cycleDays;
+  } else if (horizon === "hour") {
+    pace = 100 / (cycleDays * 24);
+  } else {
+    pace = (100 - usedPercent) / daysLeft;
+  }
+  return Math.min(100, usedPercent + pace);
+}
+
+export function buildProjectionData(
+  subscriptions: UsageSubscriptionView[],
+  now: Date,
+  horizon: TimeHorizon,
+  days: number = 30,
+): ProjectionPoint[] {
+  const active = subscriptions.filter((s) => !s.depleted);
+  if (active.length === 0) return [];
+
+  const rows = active.map((s) => {
+    const cycleDays = cycleLengthDays(s.cycle);
+    const dl = daysUntilReset(s.resetsAt, now);
+    const dayOfCycle = Math.max(1, cycleDays - dl);
+    return { s, cycleDays, dl, dayOfCycle };
+  });
+
+  const out: ProjectionPoint[] = [];
+  for (let d = 0; d <= days; d++) {
+    let totalCon = 0;
+    let totalAgg = 0;
+
+    for (const r of rows) {
+      if (d < r.dl) {
+        const cycDay = r.dayOfCycle + d;
+        totalCon += (cycDay / r.cycleDays) * 100;
+        const pace =
+          horizon === "day"
+            ? 100 / r.cycleDays
+            : horizon === "hour"
+              ? 100 / (r.cycleDays * 24)
+              : (100 - r.s.usedPercent) / r.dl;
+        totalAgg += Math.min(100, r.s.usedPercent + d * pace);
+      } else {
+        const daysSinceReset = d - r.dl;
+        const cyclePos = daysSinceReset % r.cycleDays;
+        totalCon += (cyclePos / r.cycleDays) * 100;
+        const pace = 100 / r.cycleDays;
+        totalAgg += Math.min(100, daysSinceReset * pace);
+      }
+    }
+
+    const count = rows.length;
+    out.push({
+      day: d,
+      label: d === 0 ? "now" : `+${d}d`,
+      totalConservative: Math.round((totalCon / count) * 10) / 10,
+      totalAggressive: Math.round((totalAgg / count) * 10) / 10,
+    });
+  }
+
+  return out;
+}
+
 function sortKey(
   usedPercent: number,
   daysLeft: number,
@@ -163,6 +255,14 @@ export function buildUsagePlanRows(
           cycleDays,
           conservative,
           subscription.depleted,
+        ),
+        usedPercent: subscription.usedPercent,
+        conservativeTarget: conservativeTargetValue(subscription.usedPercent, daysLeft, cycleDays),
+        aggressiveTarget: aggressiveTargetValue(
+          subscription.usedPercent,
+          daysLeft,
+          cycleDays,
+          horizon,
         ),
       };
     })

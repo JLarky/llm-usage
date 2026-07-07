@@ -2,7 +2,10 @@ import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 
 import type { UsagePlanRow, TimeHorizon } from "../utils/usage-budget.ts";
+import { buildProjectionData } from "../utils/usage-budget.ts";
 import { Document } from "./document.tsx";
+import { ProgressBar } from "./progress-bar.tsx";
+import { ProjectionChart } from "./projection-chart.tsx";
 
 const FONT_STACK =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -25,6 +28,12 @@ const columns = [
 export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon }>) {
   const rows = handle.props.rows;
   const horizon = handle.props.horizon;
+  const projectionData = buildProjectionData(
+    rows.map((r) => r.subscription),
+    new Date(),
+    horizon,
+    30,
+  );
 
   return () => (
     <Document head={<HomeHead />} title="llm-usage">
@@ -190,8 +199,22 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
                     >
                       {row.subscription.emoji} {row.subscription.provider}
                     </td>
-                    <td mix={cellStyle(row.conservative)}>{row.conservative}</td>
-                    <td mix={cellStyle()}>{row.aggressive}</td>
+                    <td mix={cellStyle(row.conservative)}>
+                      <div>{row.conservative}</div>
+                      <ProgressBar
+                        usedPercent={row.usedPercent}
+                        conservativeTarget={row.conservativeTarget}
+                        aggressiveTarget={row.aggressiveTarget}
+                      />
+                    </td>
+                    <td mix={cellStyle()}>
+                      <div>{row.aggressive}</div>
+                      <ProgressBar
+                        usedPercent={row.usedPercent}
+                        conservativeTarget={row.conservativeTarget}
+                        aggressiveTarget={row.aggressiveTarget}
+                      />
+                    </td>
                     <td mix={cellStyle()}>{row.budgetPerDay}</td>
                     <td mix={cellStyle()}>{row.subscription.reportedUsage}</td>
                     <td mix={cellStyle()} title={row.timeTitle}>
@@ -202,6 +225,7 @@ export function HomePage(handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHor
               </tbody>
             </table>
           </div>
+          <ProjectionChart data={projectionData} />
         </div>
       </main>
     </Document>
