@@ -10,17 +10,27 @@ export type UsagePlanRow = {
   sortKey: number;
 };
 
+const TZ = "America/Denver";
 const MS_PER_DAY = 86_400_000;
 
 export function cycleLengthDays(cycle: UsageCycle): number {
   return cycle === "weekly" ? 7 : 30;
 }
 
+function dateStrInTz(date: Date): string {
+  return date.toLocaleDateString("en-CA", { timeZone: TZ });
+}
+
+function parseResetDate(resetsAt: string): string {
+  return resetsAt.split("T")[0];
+}
+
 export function daysUntilReset(resetsAt: string, now = new Date()): number {
-  const reset = new Date(resetsAt);
-  const startUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const endUtc = Date.UTC(reset.getUTCFullYear(), reset.getUTCMonth(), reset.getUTCDate());
-  return Math.max(0, Math.round((endUtc - startUtc) / MS_PER_DAY));
+  const todayStr = dateStrInTz(now);
+  const resetDateStr = parseResetDate(resetsAt);
+  const todayMs = new Date(todayStr + "T00:00:00").getTime();
+  const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
+  return Math.max(0, Math.round((resetMs - todayMs) / MS_PER_DAY));
 }
 
 export function formatDaysLeft(days: number, resetLabel: string): string {
