@@ -58,26 +58,6 @@ export function cycleLengthDays(cycle: UsageCycle): number {
   return cycle === "weekly" ? 7 : 30;
 }
 
-function dateStrInTz(date: Date): string {
-  return date.toLocaleDateString("en-CA", { timeZone: TZ });
-}
-
-function parseResetDate(resetsAt: string): string {
-  return resetsAt.split("T")[0];
-}
-
-export function daysUntilReset(resetsAt: string, now = new Date()): number {
-  const todayStr = dateStrInTz(now);
-  const resetDateStr = parseResetDate(resetsAt);
-  const todayMs = new Date(todayStr + "T00:00:00").getTime();
-  const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
-  return Math.max(0, Math.round((resetMs - todayMs) / MS_PER_DAY));
-}
-
-export function formatDaysLeft(days: number, resetLabel: string): string {
-  return `${days} until ${resetLabel}`;
-}
-
 function utcOffsetMsAt(date: Date, tz: string): number {
   const tzStr = date.toLocaleString("sv", { timeZone: tz, hour12: false });
   const utcStr = date.toLocaleString("sv", { timeZone: "UTC", hour12: false });
@@ -87,14 +67,70 @@ function utcOffsetMsAt(date: Date, tz: string): number {
 }
 
 function naiveToUtc(naiveIso: string): number {
-  const d = new Date(naiveIso);
-  return d.getTime() + utcOffsetMsAt(d, TZ);
+  const match = naiveIso.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2})(?::(\d{2}))?(?::(\d{2}))?(?:\.\d+)?$/,
+  );
+  if (!match) return new Date(naiveIso).getTime();
+
+  const [, year, month, day, hour, minute = "00", second = "00"] = match;
+  const utcGuess = Date.UTC(
+    Number.parseInt(year, 10),
+    Number.parseInt(month, 10) - 1,
+    Number.parseInt(day, 10),
+    Number.parseInt(hour, 10),
+    Number.parseInt(minute, 10),
+    Number.parseInt(second, 10),
+  );
+
+  return utcGuess + utcOffsetMsAt(new Date(utcGuess), TZ);
 }
 
 export function hoursUntilReset(resetsAt: string, now = new Date()): number {
   const resetUtc = naiveToUtc(resetsAt);
   const diffMs = resetUtc - now.getTime();
   return Math.max(0, Math.round(diffMs / 3_600_000));
+}
+
+type ResetWindow = {
+  nextResetUtc: number;
+  hoursLeft: number;
+  timeLeftDays: number;
+  resetHappened: boolean;
+};
+
+export function nextResetWindow(
+  resetsAt: string,
+  cycleDays: number,
+  now = new Date(),
+): ResetWindow {
+  const cycleMs = cycleDays * MS_PER_DAY;
+  const nowMs = now.getTime();
+  let nextResetUtc = naiveToUtc(resetsAt);
+  let resetHappened = false;
+
+  while (nextResetUtc <= nowMs) {
+    nextResetUtc += cycleMs;
+    resetHappened = true;
+  }
+
+  const diffMs = Math.max(0, nextResetUtc - nowMs);
+  const hoursLeft = Math.round(diffMs / 3_600_000);
+
+  return {
+    nextResetUtc,
+    hoursLeft,
+    timeLeftDays: diffMs / MS_PER_DAY,
+    resetHappened,
+  };
+}
+
+export function daysUntilReset(resetsAt: string, now = new Date(), cycleDays = 30): number {
+  return Math.floor(nextResetWindow(resetsAt, cycleDays, now).timeLeftDays);
+}
+
+export function formatDaysLeft(hoursLeft: number, resetLabel: string): string {
+  if (hoursLeft < 24) return `${hoursLeft}h until ${resetLabel}`;
+  return `${Math.floor(hoursLeft / 24)}d until ${resetLabel}`;
 }
 
 export function formatTimeUntilReset(hours: number): string {
@@ -109,12 +145,12 @@ export function formatTimeUntilReset(hours: number): string {
 
 export function conservativeBudget(
   usedPercent: number,
-  daysLeft: number,
+  timeLeftDays: number,
   cycleDays: number,
 ): string {
   if (usedPercent >= 100) return "depleted";
 
-  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+  const dayOfCycle = Math.max(0, cycleDays - timeLeftDays);
   const expectedMax = (dayOfCycle / cycleDays) * 100;
 
   if (usedPercent < expectedMax) {
@@ -126,12 +162,12 @@ export function conservativeBudget(
 
 export function aggressiveBudget(
   usedPercent: number,
-  daysLeft: number,
+  timeLeftDays: number,
   cycleDays: number = 30,
   horizon: TimeHorizon = "cycle",
 ): string {
   if (usedPercent >= 100) return "depleted";
-  if (daysLeft <= 0) return `${Math.round(usedPercent)}%`;
+  if (timeLeftDays <= 0) return `${Math.round(usedPercent)}%`;
 
   let pace: number;
   if (horizon === "day") {
@@ -139,48 +175,48 @@ export function aggressiveBudget(
   } else if (horizon === "hour") {
     pace = 100 / (cycleDays * 24);
   } else {
-    pace = (100 - usedPercent) / daysLeft;
+    pace = (100 - usedPercent) / timeLeftDays;
   }
 
   const end = Math.min(100, usedPercent + pace);
   return `${Math.round(usedPercent)}% → ${Math.round(end)}%`;
 }
 
-export function budgetPerDay(usedPercent: number, daysLeft: number, cycleDays: number): string {
+export function budgetPerDay(usedPercent: number, timeLeftDays: number, cycleDays: number): string {
   if (usedPercent >= 100) return "—";
-  if (daysLeft <= 0) return "—";
+  if (timeLeftDays <= 0) return "—";
 
   const flatDailyRate = 100 / cycleDays;
-  const evenPace = (100 - usedPercent) / daysLeft;
+  const evenPace = (100 - usedPercent) / timeLeftDays;
 
   return `${flatDailyRate.toFixed(1)}% (${evenPace.toFixed(1)}%)`;
 }
 
 export function conservativeTargetValue(
   usedPercent: number,
-  daysLeft: number,
+  timeLeftDays: number,
   cycleDays: number,
 ): number | null {
   if (usedPercent >= 100) return null;
-  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+  const dayOfCycle = Math.max(0, cycleDays - timeLeftDays);
   return (dayOfCycle / cycleDays) * 100;
 }
 
 export function aggressiveTargetValue(
   usedPercent: number,
-  daysLeft: number,
+  timeLeftDays: number,
   cycleDays: number,
   horizon: TimeHorizon = "cycle",
 ): number | null {
   if (usedPercent >= 100) return null;
-  if (daysLeft <= 0) return null;
+  if (timeLeftDays <= 0) return null;
   let pace: number;
   if (horizon === "day") {
     pace = 100 / cycleDays;
   } else if (horizon === "hour") {
     pace = 100 / (cycleDays * 24);
   } else {
-    pace = (100 - usedPercent) / daysLeft;
+    pace = (100 - usedPercent) / timeLeftDays;
   }
   return Math.min(100, usedPercent + pace);
 }
@@ -206,14 +242,15 @@ export function buildProjectionData(
 
   const series: ProjectionSeries[] = active.map((s, i) => {
     const cycleDays = cycleLengthDays(s.cycle);
-    const dl = daysUntilReset(s.resetsAt, now);
-    const dayOfCycle = Math.max(1, cycleDays - dl);
+    const resetWindow = nextResetWindow(s.resetsAt, cycleDays, now);
+    const timeLeftDays = resetWindow.timeLeftDays;
+    const dayOfCycle = Math.max(0, cycleDays - timeLeftDays);
 
     const con: number[] = [];
     const agg: number[] = [];
 
     for (let d = 0; d <= days; d++) {
-      if (d < dl) {
+      if (d < timeLeftDays) {
         const cycDay = dayOfCycle + d;
         con.push((cycDay / cycleDays) * 100);
         const pace =
@@ -221,10 +258,10 @@ export function buildProjectionData(
             ? 100 / cycleDays
             : horizon === "hour"
               ? 100 / (cycleDays * 24)
-              : (100 - s.usedPercent) / dl;
+              : (100 - s.usedPercent) / timeLeftDays;
         agg.push(Math.min(100, s.usedPercent + d * pace));
       } else {
-        const daysSinceReset = d - dl;
+        const daysSinceReset = d - timeLeftDays;
         const cyclePos = daysSinceReset % cycleDays;
         con.push((cyclePos / cycleDays) * 100);
         const pace = 100 / cycleDays;
@@ -263,7 +300,7 @@ export function buildProjectionData(
 
 function sortKey(
   usedPercent: number,
-  daysLeft: number,
+  timeLeftDays: number,
   cycleDays: number,
   conservative: string,
   depleted: boolean,
@@ -274,7 +311,7 @@ function sortKey(
     return 1_000 + (Number.isFinite(amount) ? amount : 999);
   }
 
-  const dayOfCycle = Math.max(1, cycleDays - daysLeft);
+  const dayOfCycle = Math.max(0, cycleDays - timeLeftDays);
   const expectedMax = (dayOfCycle / cycleDays) * 100;
   return -(expectedMax - usedPercent);
 }
@@ -286,56 +323,59 @@ export function buildUsagePlanRows(
 ): UsagePlanRow[] {
   return subscriptions
     .map((subscription) => {
-      const todayStr = dateStrInTz(now);
-      let resetDateStr = parseResetDate(subscription.resetsAt);
-      let daysLeft = daysUntilReset(subscription.resetsAt, now);
       const cycleDays = cycleLengthDays(subscription.cycle);
-      let resetHappened = false;
-
-      if (daysLeft === 0) {
-        const todayMs = new Date(todayStr + "T00:00:00").getTime();
-        const resetMs = new Date(resetDateStr + "T00:00:00").getTime();
-        if (resetMs <= todayMs) {
-          const cycleMs = cycleDays * MS_PER_DAY;
-          let nextMs = resetMs + cycleMs;
-          while (nextMs <= todayMs) nextMs += cycleMs;
-          const d = new Date(nextMs);
-          resetDateStr = d.toISOString().split("T")[0];
-          daysLeft = Math.round((nextMs - todayMs) / MS_PER_DAY);
-          resetHappened = true;
-        }
-      }
-
-      const nextResetDate = new Date(resetDateStr + "T00:00:00Z");
+      const resetWindow = nextResetWindow(subscription.resetsAt, cycleDays, now);
+      const nextResetDate = new Date(resetWindow.nextResetUtc);
       const labelMonth = nextResetDate.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
       const labelDay = nextResetDate.getUTCDate();
       const resetLabel = `${labelMonth} ${labelDay}`;
 
-      const effectiveUsed = resetHappened ? 0 : subscription.usedPercent;
-      const effectiveDepleted = resetHappened ? false : subscription.depleted;
+      const effectiveUsed = resetWindow.resetHappened ? 0 : subscription.usedPercent;
+      const effectiveDepleted = resetWindow.resetHappened ? false : subscription.depleted;
 
-      const conservative = conservativeBudget(effectiveUsed, daysLeft, cycleDays);
-      const aggressive = aggressiveBudget(effectiveUsed, daysLeft, cycleDays, horizon);
+      const conservative = conservativeBudget(effectiveUsed, resetWindow.timeLeftDays, cycleDays);
+      const aggressive = aggressiveBudget(
+        effectiveUsed,
+        resetWindow.timeLeftDays,
+        cycleDays,
+        horizon,
+      );
 
-      const timeTitle = resetHappened
-        ? formatTimeUntilReset(daysLeft * 24)
-        : formatTimeUntilReset(hoursUntilReset(subscription.resetsAt, now));
+      const timeTitle = formatTimeUntilReset(resetWindow.hoursLeft);
 
-      const dayOfCycle = Math.max(1, cycleDays - daysLeft);
-      const elapsedPct = Math.round((dayOfCycle / cycleDays) * 1000) / 10;
-      const elapsedLabel = `${dayOfCycle}d / ${cycleDays}d`;
+      const elapsedHours = Math.round((cycleDays - resetWindow.timeLeftDays) * 24);
+      const cycleHours = cycleDays * 24;
+      const elapsedPct =
+        Math.round(((cycleDays - resetWindow.timeLeftDays) / cycleDays) * 1000) / 10;
+      const elapsedLabel = `${elapsedHours}h / ${cycleHours}h`;
+      const displayHoursLeft = Math.max(0, resetWindow.hoursLeft);
 
       return {
         subscription,
         conservative,
         aggressive,
-        budgetPerDay: budgetPerDay(effectiveUsed, daysLeft, cycleDays),
-        daysLeft: formatDaysLeft(daysLeft, resetLabel),
+        budgetPerDay: budgetPerDay(effectiveUsed, resetWindow.timeLeftDays, cycleDays),
+        daysLeft: formatDaysLeft(displayHoursLeft, resetLabel),
         timeTitle,
-        sortKey: sortKey(effectiveUsed, daysLeft, cycleDays, conservative, effectiveDepleted),
+        sortKey: sortKey(
+          effectiveUsed,
+          resetWindow.timeLeftDays,
+          cycleDays,
+          conservative,
+          effectiveDepleted,
+        ),
         usedPercent: effectiveUsed,
-        conservativeTarget: conservativeTargetValue(effectiveUsed, daysLeft, cycleDays),
-        aggressiveTarget: aggressiveTargetValue(effectiveUsed, daysLeft, cycleDays, horizon),
+        conservativeTarget: conservativeTargetValue(
+          effectiveUsed,
+          resetWindow.timeLeftDays,
+          cycleDays,
+        ),
+        aggressiveTarget: aggressiveTargetValue(
+          effectiveUsed,
+          resetWindow.timeLeftDays,
+          cycleDays,
+          horizon,
+        ),
         timeElapsedPercent: elapsedPct,
         timeElapsedLabel: elapsedLabel,
       };

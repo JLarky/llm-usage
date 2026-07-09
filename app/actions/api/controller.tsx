@@ -1,6 +1,6 @@
 import { createController } from "remix/router";
 
-import { saveUsageSubscriptions } from "../../data/usage-store.ts";
+import { loadUsageSubscriptions, saveUsageSubscriptions } from "../../data/usage-store.ts";
 import { routes } from "../../routes.ts";
 import { jsonResponse, parseUsageSubscriptionsDocument } from "../../utils/usage-api.ts";
 
@@ -21,6 +21,14 @@ function isAuthorized(request: Request): Response | null {
 export default createController(routes.api, {
   actions: {
     async usage({ request }) {
+      if (request.method === "GET") {
+        return jsonResponse(await loadUsageSubscriptions());
+      }
+
+      if (request.method !== "POST") {
+        return jsonResponse({ error: "Method Not Allowed" }, 405);
+      }
+
       const authError = isAuthorized(request);
       if (authError) return authError;
 
