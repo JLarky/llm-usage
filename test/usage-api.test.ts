@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { parseUsageSubscriptionsDocument } from "../app/utils/usage-api.ts";
 
-test("accepts a valid subscriptions document", () => {
+void test("accepts a valid subscriptions document", () => {
   const parsed = parseUsageSubscriptionsDocument({
     subscriptions: [
       {
@@ -24,7 +24,7 @@ test("accepts a valid subscriptions document", () => {
   }
 });
 
-test("rejects used above total", () => {
+void test("rejects used above total", () => {
   const parsed = parseUsageSubscriptionsDocument({
     subscriptions: [
       {
