@@ -287,6 +287,72 @@ export async function revokeUserApiToken(
   return { ok: true };
 }
 
+export async function revokeDeviceInvite(
+  userId: string,
+  inviteId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getUser(userId);
+  if (!user) return { ok: false, error: "User not found" };
+  const existing = user.deviceInvites.find((entry) => entry.id === inviteId);
+  if (!existing) return { ok: false, error: "Invite not found" };
+  if (existing.claimedAt) return { ok: false, error: "Invite already used" };
+
+  const next: UserRecord = {
+    ...user,
+    deviceInvites: user.deviceInvites.filter((entry) => entry.id !== inviteId),
+  };
+  await saveUser(next);
+
+  const kv = await openKv();
+  if (kv) {
+    await kv.delete(["invite", inviteId]);
+  } else {
+    const store = await readLocalStore();
+    delete store.inviteIndex[inviteId];
+    await writeLocalStore(store);
+  }
+  return { ok: true };
+}
+
+/** Deletes the user record plus passkey, invite, API token, and usage indexes. */
+export async function deleteUserAndData(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getUser(userId);
+  if (!user) return { ok: false, error: "User not found" };
+
+  const kv = await openKv();
+  if (kv) {
+    for (const passkey of user.passkeys) {
+      await kv.delete(["cred", passkey.credentialId]);
+    }
+    for (const invite of user.deviceInvites) {
+      await kv.delete(["invite", invite.id]);
+    }
+    for (const token of user.apiTokens) {
+      await kv.delete(["apitoken", token.tokenHash]);
+    }
+    await kv.delete(["usage", userId]);
+    await kv.delete(["user", userId]);
+    return { ok: true };
+  }
+
+  const store = await readLocalStore();
+  for (const passkey of user.passkeys) {
+    delete store.credIndex[passkey.credentialId];
+  }
+  for (const invite of user.deviceInvites) {
+    delete store.inviteIndex[invite.id];
+  }
+  for (const token of user.apiTokens) {
+    delete store.tokenIndex[token.tokenHash];
+  }
+  delete store.usage[userId];
+  delete store.users[userId];
+  await writeLocalStore(store);
+  return { ok: true };
+}
+
 export async function resolveUserIdFromApiToken(token: string): Promise<string | null> {
   const tokenHash = hashApiToken(token);
   const kv = await openKv();

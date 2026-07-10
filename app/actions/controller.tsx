@@ -5,10 +5,12 @@ import { parseUsageSubscriptionsForm } from "../data/usage-form.ts";
 import {
   createDeviceInvite,
   createUserApiToken,
+  deleteUserAndData,
   getDeviceInvite,
   getUser,
   listPendingDeviceInvites,
   loadUserUsage,
+  revokeDeviceInvite,
   revokeUserApiToken,
   sampleUsageDocument,
   saveUserUsage,
@@ -46,6 +48,7 @@ function adminNotice(url: URL): string | null {
   const token = url.searchParams.get("token");
   if (token) return `API token created. Copy it now — it will not be shown again: ${token}`;
   if (url.searchParams.get("revoked") === "1") return "API token revoked.";
+  if (url.searchParams.get("inviteRevoked") === "1") return "Device invite revoked.";
   return null;
 }
 
@@ -126,14 +129,16 @@ export default createController(routes, {
 
       if (context.request.method === "GET") {
         const document = await loadUserUsage(userId);
+        const url = new URL(context.request.url);
         return context.render(
           <AdminPage
             user={user}
             pendingInvites={listPendingDeviceInvites(user)}
             subscriptions={document.subscriptions}
             error={null}
-            notice={adminNotice(new URL(context.request.url))}
-            createdToken={new URL(context.request.url).searchParams.get("token")}
+            notice={adminNotice(url)}
+            createdToken={url.searchParams.get("token")}
+            confirmDelete={url.searchParams.get("confirmDelete") === "1"}
           />,
         );
       }
@@ -157,11 +162,31 @@ export default createController(routes, {
               error="Could not create invite"
               notice={null}
               createdToken={null}
+              confirmDelete={false}
             />,
             { status: 500 },
           );
         }
         return redirect(withQuery(routes.admin.href(), { deviceInvite: invite.id }));
+      }
+
+      if (intent === "revoke-device-invite") {
+        const revoked = await revokeDeviceInvite(userId, textField(formData, "inviteId"));
+        if (!revoked.ok) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error={revoked.error}
+              notice={null}
+              createdToken={null}
+              confirmDelete={false}
+            />,
+            { status: 400 },
+          );
+        }
+        return redirect(withQuery(routes.admin.href(), { inviteRevoked: "1" }));
       }
 
       if (intent === "create-api-token") {
@@ -175,6 +200,7 @@ export default createController(routes, {
               error={created.error}
               notice={null}
               createdToken={null}
+              confirmDelete={false}
             />,
             { status: 400 },
           );
@@ -193,11 +219,37 @@ export default createController(routes, {
               error={revoked.error}
               notice={null}
               createdToken={null}
+              confirmDelete={false}
             />,
             { status: 400 },
           );
         }
         return redirect(withQuery(routes.admin.href(), { revoked: "1" }));
+      }
+
+      if (intent === "delete-account") {
+        const confirmed = textField(formData, "confirm") === "yes";
+        if (!confirmed) {
+          return redirect(withQuery(routes.admin.href(), { confirmDelete: "1" }));
+        }
+        const deleted = await deleteUserAndData(userId);
+        if (!deleted.ok) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error={deleted.error}
+              notice={null}
+              createdToken={null}
+              confirmDelete={true}
+            />,
+            { status: 400 },
+          );
+        }
+        context.session.unset("userId");
+        context.session.regenerateId();
+        return redirect(routes.home.href());
       }
 
       const parsed = parseUsageSubscriptionsForm(formData);
@@ -210,6 +262,7 @@ export default createController(routes, {
             error={parsed.error}
             notice={null}
             createdToken={null}
+            confirmDelete={false}
           />,
           { status: 400 },
         );

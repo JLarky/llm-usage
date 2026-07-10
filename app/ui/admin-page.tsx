@@ -18,9 +18,11 @@ export function AdminPage(
     error: string | null;
     notice: string | null;
     createdToken: string | null;
+    confirmDelete: boolean;
   }>,
 ) {
-  const { user, pendingInvites, subscriptions, error, notice, createdToken } = handle.props;
+  const { user, pendingInvites, subscriptions, error, notice, createdToken, confirmDelete } =
+    handle.props;
 
   return () => (
     <Document head={<AdminHead />} title="llm-usage admin">
@@ -213,7 +215,14 @@ export function AdminPage(
               <ul mix={css({ margin: "12px 0 0", paddingLeft: "18px" })}>
                 {pendingInvites.map((invite) => (
                   <li key={invite.id}>
-                    <code>/invite/{invite.id}</code> · expires {invite.expiresAt.slice(0, 10)}
+                    <code>/invite/{invite.id}</code> · expires {invite.expiresAt.slice(0, 10)}{" "}
+                    <form method="POST" action="/admin" mix={css({ display: "inline" })}>
+                      <input type="hidden" name="intent" value="revoke-device-invite" />
+                      <input type="hidden" name="inviteId" value={invite.id} />
+                      <button type="submit" mix={linkButtonStyle()}>
+                        revoke
+                      </button>
+                    </form>
                   </li>
                 ))}
               </ul>
@@ -256,6 +265,49 @@ export function AdminPage(
               </ul>
             )}
           </section>
+
+          <section
+            mix={css({
+              border: "1px solid var(--danger)",
+              borderRadius: "12px",
+              background: "var(--surface-3)",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            })}
+          >
+            <h2 mix={sectionTitleStyle()}>Delete account</h2>
+            {confirmDelete ? (
+              <>
+                <p mix={css({ margin: 0, color: "var(--danger)" })}>
+                  Are you sure? This permanently deletes your user, passkeys, invites, API tokens,
+                  and usage data. This cannot be undone.
+                </p>
+                <div mix={css({ display: "flex", gap: "12px", alignItems: "center" })}>
+                  <form method="POST" action="/admin">
+                    <input type="hidden" name="intent" value="delete-account" />
+                    <input type="hidden" name="confirm" value="yes" />
+                    <button type="submit" mix={buttonStyle({ danger: true })}>
+                      Yes, delete everything
+                    </button>
+                  </form>
+                  <a href="/admin" mix={linkStyle()}>
+                    Cancel
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                <p mix={css({ margin: 0, color: "var(--text-secondary)" })}>
+                  Remove this account and all stored data for <code>{user.id}</code>.
+                </p>
+                <a href="/admin?confirmDelete=1" mix={buttonStyle({ danger: true, asLink: true })}>
+                  Delete account…
+                </a>
+              </>
+            )}
+          </section>
         </div>
       </main>
     </Document>
@@ -273,16 +325,18 @@ function AdminHead() {
 }
 
 function sectionStyle() {
-  return css({
-    border: "1px solid var(--border)",
-    borderRadius: "12px",
-    background: "var(--surface-3)",
-    padding: "16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-  });
+  return css(sectionBase);
 }
+
+const sectionBase = {
+  border: "1px solid var(--border)",
+  borderRadius: "12px",
+  background: "var(--surface-3)",
+  padding: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+} as const;
 
 function sectionTitleStyle() {
   return css({ margin: 0, fontSize: "16px", fontWeight: 700 });
@@ -327,16 +381,22 @@ function inputStyle() {
   });
 }
 
-function buttonStyle(opts?: { secondary?: boolean }) {
+function buttonStyle(opts?: { secondary?: boolean; danger?: boolean; asLink?: boolean }) {
   return css({
     appearance: "none",
+    display: opts?.asLink ? "inline-block" : undefined,
+    textDecoration: opts?.asLink ? "none" : undefined,
     border: opts?.secondary ? "1px solid var(--border)" : "none",
     borderRadius: "10px",
     padding: "10px 14px",
     font: "inherit",
     fontWeight: 600,
     cursor: "pointer",
-    background: opts?.secondary ? "transparent" : "var(--brand-blue)",
+    background: opts?.danger
+      ? "var(--danger)"
+      : opts?.secondary
+        ? "transparent"
+        : "var(--brand-blue)",
     color: opts?.secondary ? "var(--text-primary)" : "#fff",
   });
 }
