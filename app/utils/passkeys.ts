@@ -25,11 +25,20 @@ function configuredOrigins(): string[] {
   return ["http://localhost:4576", "http://localhost:5173", "http://127.0.0.1:4576"];
 }
 
-function defaultRpID(hostname: string): string {
-  if (hostname === "localhost" || hostname === "127.0.0.1") return "localhost";
-  if (hostname === "jlarky.deno.net" || hostname.endsWith(".jlarky.deno.net")) {
-    return "jlarky.deno.net";
+/**
+ * RP ID must be the exact request hostname on Deno Deploy.
+ * `deno.net` is a public suffix (like `pages.dev`). Collapsing preview hosts to
+ * parent `jlarky.deno.net` is technically a valid eTLD+1, but browsers then skip
+ * platform authenticators (Touch ID) and only offer hybrid QR / security keys.
+ * webauthn.io uses the exact host — match that.
+ */
+function resolveRpID(hostname: string): string {
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return process.env.WEBAUTHN_RP_ID?.trim() || "localhost";
   }
+  const configured = process.env.WEBAUTHN_RP_ID?.trim();
+  // Only honor an explicit RP ID when it matches this host (ignore stale parent).
+  if (configured && configured === hostname) return configured;
   return hostname;
 }
 
@@ -56,8 +65,7 @@ export function resolveWebAuthnRequest(request: Request): { origin: string; rpID
   if (!isAllowedWebAuthnOrigin(origin)) return null;
 
   const hostname = new URL(origin).hostname;
-  const rpID = process.env.WEBAUTHN_RP_ID ?? defaultRpID(hostname);
-  return { origin, rpID };
+  return { origin, rpID: resolveRpID(hostname) };
 }
 
 function rpName(): string {
