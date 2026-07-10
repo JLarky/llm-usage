@@ -30,12 +30,21 @@ const columns = [
 ] as const;
 
 export function HomePage(
-  handle: Handle<{ rows: UsagePlanRow[]; horizon: TimeHorizon; now: Date; shiftMs: number }>,
+  handle: Handle<{
+    rows: UsagePlanRow[];
+    horizon: TimeHorizon;
+    now: Date;
+    shiftMs: number;
+    signedIn: boolean;
+    userId: string | null;
+  }>,
 ) {
   const rows = handle.props.rows;
   const horizon = handle.props.horizon;
   const now = handle.props.now;
   const shiftMs = handle.props.shiftMs;
+  const signedIn = handle.props.signedIn;
+  const userId = handle.props.userId;
   const projection = buildProjectionData(
     rows.map((r) => r.subscription),
     now,
@@ -116,9 +125,58 @@ export function HomePage(
                 maxWidth: "72ch",
               })}
             >
-              Under-budget providers first, then smallest overage. Use conservative ranges before
-              aggressive pace.
+              {signedIn
+                ? `Signed in · showing your data (${userId?.slice(0, 8)}…).`
+                : "Sample data. Sign in to see and edit your own subscriptions."}{" "}
+              Under-budget providers first, then smallest overage.
             </p>
+            <div
+              mix={css({
+                display: "flex",
+                gap: "12px",
+                marginTop: "10px",
+                alignItems: "center",
+              })}
+            >
+              {signedIn ? (
+                <>
+                  <a
+                    href="/admin"
+                    mix={css({
+                      color: "var(--brand-blue)",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                    })}
+                  >
+                    Admin
+                  </a>
+                  <form method="POST" action="/logout">
+                    <button
+                      type="submit"
+                      mix={css({
+                        appearance: "none",
+                        border: "1px solid var(--border)",
+                        background: "transparent",
+                        color: "var(--text-secondary)",
+                        borderRadius: "8px",
+                        padding: "4px 10px",
+                        font: "inherit",
+                        cursor: "pointer",
+                      })}
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <a
+                  href="/login"
+                  mix={css({ color: "var(--brand-blue)", fontWeight: 600, textDecoration: "none" })}
+                >
+                  Sign in
+                </a>
+              )}
+            </div>
             <div
               mix={css({
                 display: "flex",

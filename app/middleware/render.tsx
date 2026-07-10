@@ -7,6 +7,12 @@ import { createHtmlResponse } from "remix/response/html";
 import type { RemixNode } from "remix/ui";
 import { renderToStream } from "remix/ui/server";
 
+/** Stable module ids for clientEntry components (survives Nitro SSR bundling). */
+const CLIENT_ENTRY_BY_EXPORT: Record<string, string> = {
+  PasskeyButtons: "/app/ui/passkey-buttons.tsx",
+  PromptButton: "/app/assets/prompt-button.tsx",
+};
+
 export function render() {
   return renderWith(
     ({ request, router }) =>
@@ -16,18 +22,37 @@ export function render() {
           signal: request.signal,
           resolveFrame: (src) => resolveFrame(router, request, src),
           async resolveClientEntry(entryId, component) {
+            const exportName =
+              entryId.split("#")[1] || component.name || titleCaseFileName(entryId);
+
+            // Explicit app-relative ids (preferred for production)
+            if (entryId.startsWith("/app/")) {
+              return { href: entryId.split("#")[0]!, exportName };
+            }
+
             if (!entryId.startsWith("file://")) {
               throw new Error(
-                `Expected \`import.meta.url\` for clientEntry ID, received '${entryId}'`,
+                `Expected \`/app/...\` or \`import.meta.url\` for clientEntry ID, received '${entryId}'`,
               );
             }
 
             const filePath = fileURLToPath(entryId);
-            const relPath = path.relative(process.cwd(), filePath).replaceAll("\\", "/");
+            let relPath = path.relative(process.cwd(), filePath).replaceAll("\\", "/");
+
+            // Nitro SSR bundles collapse import.meta.url to .output/server/_ssr/ssr.mjs
+            if (relPath.includes(".output/") || /(^|\/)ssr\.mjs$/.test(relPath)) {
+              const recovered = CLIENT_ENTRY_BY_EXPORT[exportName];
+              if (!recovered) {
+                throw new Error(
+                  `Cannot resolve client entry "${exportName}" from bundled SSR path ${relPath}`,
+                );
+              }
+              return { href: recovered, exportName };
+            }
 
             return {
               href: `/${relPath}`,
-              exportName: entryId.split("#")[1] || component.name || titleCaseFileName(entryId),
+              exportName,
             };
           },
         });
@@ -63,7 +88,7 @@ async function resolveFrame(router: Router, request: Request, src: string) {
 }
 
 function titleCaseFileName(fileUrl: string): string {
-  const url = new URL(fileUrl);
+  const url = new URL(fileUrl, "file:///");
   const fileName = path.basename(url.pathname, path.extname(url.pathname));
   return fileName
     .split(/[^A-Za-z0-9]+/)
