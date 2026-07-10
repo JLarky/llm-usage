@@ -7,31 +7,44 @@ Remix 3 app with Vite+ toolchain and Nitro deployment.
 - [Remix 3](https://remix.run/) (`remix@next`) — fetch-router, SSR, `clientEntry` hydration
 - [vite-plugin-remix3](https://github.com/pi0/vite-plugin-remix3) + [Nitro](https://nitro.build/) — Vite dev/build and portable deploys
 - [Vite+](https://viteplus.dev/) (`vp`) — lint, format, typecheck, dev, build
+- [SimpleWebAuthn](https://simplewebauthn.dev/) — passkey register / login
 
-## Data storage
+## Accounts and data
 
-Subscription rows are stored as JSON in Deno KV under `["usage", "subscriptions"]`:
+- Anonymous home page shows **sample** subscription data.
+- Sign in with a **passkey** creates a random user id and a personal copy of the data.
+- Signed-in home page shows **your** data. Edit it on `/admin`.
+- Link more of your devices with a one-time `/invite/:id` URL (new passkey on that device, same user).
+- Create **personal API tokens** on `/admin` for curl / scripts. There is no global `USAGE_API_TOKEN`.
 
-```json
-{ "subscriptions": [{ "id": "cursor", "used": 6, "total": 20, ... }] }
-```
+KV shape (Deno KV or local `data/app-store.local.json`):
 
-- **Deno Deploy:** link a Deno KV database in the dashboard; `Deno.openKv()` connects automatically.
-- **Local Deno:** set `DENO_KV_URL` to your database connect URL (see `.env.example`).
-- **Local Node (`vp run dev`):** falls back to `data/usage-subscriptions.local.json`, then `data/usage-subscriptions.default.json`.
-
-On first read, an empty KV key is seeded from the default JSON file.
+- `["user", userId]` — passkeys, invites, API token metadata
+- `["usage", userId]` — that user's subscriptions document
+- `["cred", credentialId]` → userId
+- `["invite", inviteId]` → userId
+- `["apitoken", tokenHash]` → userId
 
 ### Update via API
 
 ```sh
 curl -X POST https://llm-usage.jlarky.deno.net/api/usage \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer <USAGE_API_TOKEN>' \
+  -H 'authorization: Bearer <personal-api-token>' \
   -d @data/usage-subscriptions.default.json
 ```
 
-`USAGE_API_TOKEN` is required on the server. POST without a matching `Authorization: Bearer` header returns 401.
+Anonymous `GET /api/usage` returns sample data. Authenticated GET/POST are scoped to that user.
+
+### WebAuthn env
+
+- Local: `WEBAUTHN_RP_ID=localhost`, open `http://localhost:…` (not a LAN IP)
+- Prod + PR previews: `WEBAUTHN_RP_ID=jlarky.deno.net`
+- `SESSION_SECRET` required in production
+- Request `Origin` is accepted for `localhost` / `127.0.0.1` and `https://*.jlarky.deno.net` (no need to list every preview URL)
+- Registration/login prefer `client-device` hints (Touch ID / platform authenticator)
+
+See `.env.example`.
 
 ## Commands
 

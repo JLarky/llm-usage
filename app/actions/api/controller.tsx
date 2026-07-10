@@ -1,36 +1,40 @@
 import { createController } from "remix/router";
 
-import { loadUsageSubscriptions, saveUsageSubscriptions } from "../../data/usage-store.ts";
+import {
+  loadUserUsage,
+  resolveUserIdFromApiToken,
+  sampleUsageDocument,
+  saveUserUsage,
+} from "../../data/users.ts";
+import { requireUserId } from "../../middleware/auth-session.ts";
 import { routes } from "../../routes.ts";
 import { jsonResponse, parseUsageSubscriptionsDocument } from "../../utils/usage-api.ts";
 
-function isAuthorized(request: Request): Response | null {
-  const token = process.env.USAGE_API_TOKEN;
-  if (!token) {
-    return jsonResponse({ error: "API token not configured" }, 503);
-  }
-
+async function resolveUsageUserId(request: Request, session: { get(key: string): unknown }) {
   const header = request.headers.get("authorization");
-  if (header !== `Bearer ${token}`) {
-    return jsonResponse({ error: "Unauthorized" }, 401);
+  if (header?.startsWith("Bearer ")) {
+    const token = header.slice("Bearer ".length).trim();
+    if (!token) return null;
+    return resolveUserIdFromApiToken(token);
   }
-
-  return null;
+  return requireUserId(session);
 }
 
 export default createController(routes.api, {
   actions: {
-    async usage({ request }) {
+    async usage({ request, session }) {
       if (request.method === "GET") {
-        return jsonResponse(await loadUsageSubscriptions());
+        const userId = await resolveUsageUserId(request, session);
+        if (!userId) return jsonResponse(sampleUsageDocument());
+        return jsonResponse(await loadUserUsage(userId));
       }
 
       if (request.method !== "POST") {
         return jsonResponse({ error: "Method Not Allowed" }, 405);
       }
 
-      const authError = isAuthorized(request);
-      if (authError) return authError;
+      const userId = await resolveUsageUserId(request, session);
+      if (!userId) return jsonResponse({ error: "Unauthorized" }, 401);
 
       let body: unknown;
       try {
@@ -44,7 +48,7 @@ export default createController(routes.api, {
         return jsonResponse({ error: parsed.error }, 400);
       }
 
-      await saveUsageSubscriptions(parsed.value);
+      await saveUserUsage(userId, parsed.value);
       return jsonResponse({ ok: true, subscriptions: parsed.value.subscriptions.length });
     },
   },

@@ -55,6 +55,6 @@ boo kill llm-usage-dev
 ## Notes
 
 - `localhost:4576` works from inside the VM when the server is running in `boo`.
-- `data/usage-subscriptions.local.json` is the local fallback data file used when Deno KV is not configured.
-- `GET /api/usage` returns the current local usage document JSON.
-- `POST /api/usage` still requires `Authorization: Bearer <USAGE_API_TOKEN>` when a token is configured.
+- Local Node persistence uses `data/app-store.local.json`.
+- Anonymous `GET /api/usage` returns sample data.
+- `POST /api/usage` requires a personal API token (`Authorization: Bearer …`) or a signed-in session cookie.

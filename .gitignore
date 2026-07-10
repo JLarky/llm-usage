@@ -1,6 +1,8 @@
 node_modules/
 .output/
 data/usage-subscriptions.local.json
+data/admin-accounts.local.json
+data/app-store.local.json
 db/*.sqlite
 tmp/
 .DS_Store
