@@ -105,11 +105,11 @@ export const PasskeyButtons = clientEntry(
               mix={[
                 buttonStyle(),
                 on("click", () => {
-                  void onClick(runLogin);
+                  void onClick(runRegister);
                 }),
               ]}
             >
-              {busy ? "Waiting for passkey…" : "Sign in with passkey"}
+              {busy ? "Waiting for passkey…" : "Create account with passkey"}
             </button>
             <button
               type="button"
@@ -117,11 +117,11 @@ export const PasskeyButtons = clientEntry(
               mix={[
                 buttonStyle({ secondary: true }),
                 on("click", () => {
-                  void onClick(runRegister);
+                  void onClick(runLogin);
                 }),
               ]}
             >
-              Create account with passkey
+              {busy ? "Waiting for passkey…" : "Sign in with existing passkey"}
             </button>
           </>
         ) : null}

@@ -18,8 +18,9 @@ export function LoginPage(handle: Handle<{ error: string | null; returnTo: strin
             <p mix={eyebrowStyle()}>Account</p>
             <h1 mix={titleStyle()}>Sign in</h1>
             <p mix={bodyStyle()}>
-              Passkeys only. Create an account on this device, or sign in with an existing passkey.
-              Link more devices later from Admin with a one-time invite URL.
+              First time here? Use <strong>Create account</strong> — that is what triggers Touch ID
+              / fingerprint on this Mac. <strong>Sign in</strong> only works after a passkey already
+              exists for this site; otherwise the browser offers QR / security key.
             </p>
           </header>
           <PasskeyButtons mode="login" returnTo={returnTo} error={error} />

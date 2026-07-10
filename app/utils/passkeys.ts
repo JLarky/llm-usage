@@ -82,6 +82,7 @@ export async function createRegistrationOptions(args: {
     rpName: rpName(),
     rpID: args.rpID,
     userName: args.userName,
+    userDisplayName: args.userName,
     userID: new TextEncoder().encode(args.userId),
     attestationType: "none",
     excludeCredentials: (args.excludeCredentials ?? []).map((passkey) => ({
@@ -93,7 +94,7 @@ export async function createRegistrationOptions(args: {
     authenticatorSelection: {
       authenticatorAttachment: "platform",
       residentKey: "preferred",
-      userVerification: "required",
+      userVerification: "preferred",
     },
   });
 }
