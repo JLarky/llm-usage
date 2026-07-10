@@ -11,7 +11,7 @@ interface PromptButtonProps extends SerializableProps {
 
 // This component hydrates independently; the rest of the page stays static HTML.
 export const PromptButton = clientEntry(
-  import.meta.url,
+  "/app/assets/prompt-button.tsx",
   function PromptButton(handle: Handle<PromptButtonProps>) {
     let state: CopyState = "idle";
 

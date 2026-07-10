@@ -8,7 +8,7 @@ import {
 type Mode = "login" | "register" | "invite";
 
 export const PasskeyButtons = clientEntry(
-  import.meta.url,
+  "/app/ui/passkey-buttons.tsx",
   function PasskeyButtons(
     handle: Handle<{ mode: Mode; returnTo: string; inviteId?: string; error?: string | null }>,
   ) {
