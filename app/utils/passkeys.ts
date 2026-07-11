@@ -26,18 +26,14 @@ function configuredOrigins(): string[] {
 }
 
 /**
- * RP ID must be the exact request hostname on Deno Deploy.
- * `deno.net` is a public suffix (like `pages.dev`). Collapsing preview hosts to
- * parent `jlarky.deno.net` is technically a valid eTLD+1, but browsers then skip
- * platform authenticators (Touch ID) and only offer hybrid QR / security keys.
- * webauthn.io uses the exact host — match that.
+ * RP ID must equal the request hostname.
+ * - Deno Deploy: exact preview/prod host (deno.net is a public suffix).
+ * - Local: `localhost` and `127.0.0.1` are different RP IDs. Mapping 127.0.0.1 →
+ *   localhost (e.g. via WEBAUTHN_RP_ID) is invalid and makes Chrome show
+ *   fingerprint-only register + QR-only login that cannot use the same passkey.
  */
 function resolveRpID(hostname: string): string {
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return process.env.WEBAUTHN_RP_ID?.trim() || "localhost";
-  }
   const configured = process.env.WEBAUTHN_RP_ID?.trim();
-  // Only honor an explicit RP ID when it matches this host (ignore stale parent).
   if (configured && configured === hostname) return configured;
   return hostname;
 }
@@ -78,6 +74,9 @@ export async function createRegistrationOptions(args: {
   rpID: string;
   excludeCredentials?: PasskeyRecord[];
 }): Promise<PublicKeyCredentialCreationOptionsJSON> {
+  // webauthn.io "All Supported" defaults — no authenticatorAttachment / no hints.
+  // Platform-only register + client-device login on localhost made create/login
+  // offer disjoint authenticators (Touch ID vs QR) so the new passkey could not sign in.
   return generateRegistrationOptions({
     rpName: rpName(),
     rpID: args.rpID,
@@ -85,14 +84,12 @@ export async function createRegistrationOptions(args: {
     userDisplayName: args.userName,
     userID: new TextEncoder().encode(args.userId),
     attestationType: "none",
+    supportedAlgorithmIDs: [-8, -7, -257],
     excludeCredentials: (args.excludeCredentials ?? []).map((passkey) => ({
       id: passkey.credentialId,
       transports: passkey.transports as AuthenticatorTransportFuture[] | undefined,
     })),
-    // Sets hints: ["client-device"] and authenticatorAttachment: "platform"
-    preferredAuthenticatorType: "localDevice",
     authenticatorSelection: {
-      authenticatorAttachment: "platform",
       residentKey: "preferred",
       userVerification: "preferred",
     },
@@ -103,20 +100,16 @@ export async function createAuthenticationOptions(args: {
   rpID: string;
   allowCredentials?: PasskeyRecord[];
 }): Promise<PublicKeyCredentialRequestOptionsJSON> {
-  const options = await generateAuthenticationOptions({
+  // No hints — same as deployed Chrome behavior the user sees (all options).
+  // Forcing client-device on localhost often collapses the sheet to QR only.
+  return generateAuthenticationOptions({
     rpID: args.rpID,
-    userVerification: "required",
+    userVerification: "preferred",
     allowCredentials: args.allowCredentials?.map((passkey) => ({
       id: passkey.credentialId,
       transports: passkey.transports as AuthenticatorTransportFuture[] | undefined,
     })),
   });
-
-  return {
-    ...options,
-    // Prefer this Mac/phone authenticator over QR / security key UI
-    hints: ["client-device"],
-  };
 }
 
 export async function verifyRegistration(args: {

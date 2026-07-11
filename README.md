@@ -39,7 +39,7 @@ Anonymous `GET /api/usage` returns sample data. Authenticated GET/POST are scope
 ### WebAuthn env
 
 - RP ID is the **exact request hostname** (e.g. `llm-usage.jlarky.deno.net`). Do **not** set `WEBAUTHN_RP_ID=jlarky.deno.net` — `deno.net` is a public suffix, and a parent RP ID makes browsers offer QR / security keys instead of Touch ID.
-- Local: open `http://localhost:…` (not a LAN IP); optional `WEBAUTHN_RP_ID=localhost`
+- Local: open `http://localhost:…` (not a LAN IP, and not mixed with `127.0.0.1` — those are different RP IDs). Do not set `WEBAUTHN_RP_ID` unless it exactly matches the host you open.
 - `SESSION_SECRET` required in production
 - Request `Origin` is accepted for `localhost` / `127.0.0.1` and `https://*.jlarky.deno.net`
 - Registration prefers platform / `client-device` (Touch ID)
