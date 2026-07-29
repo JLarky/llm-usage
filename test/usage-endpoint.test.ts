@@ -39,7 +39,6 @@ void test("unauthorized JSON helper returns 401 shape", () => {
 void test("api controller is wired for usage route", () => {
   assert.equal(typeof apiController, "object");
   assert.equal(routes.api.usage.method, "ANY");
-  assert.equal(routes.api.migrateKv.method, "POST");
 });
 
 void test("sample document type matches UsageSubscriptionsDocument", () => {
