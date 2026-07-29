@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { openKv, readLocalStore, writeLocalStore } from "./kv.ts";
+import { kvKey, openKv, readLocalStore, writeLocalStore } from "./kv.ts";
 import { defaultUsageSubscriptionsDocument } from "./usage-defaults.ts";
 import type { UsageSubscriptionsDocument } from "./usage-types.ts";
 
@@ -65,7 +65,7 @@ export function createApiTokenValue(): { token: string; prefix: string; tokenHas
 export async function getUser(userId: string): Promise<UserRecord | null> {
   const kv = await openKv();
   if (kv) {
-    const entry = await kv.get<UserRecord>(["user", userId]);
+    const entry = await kv.get<UserRecord>(kvKey("user", userId));
     return entry.value;
   }
   const store = await readLocalStore();
@@ -76,7 +76,7 @@ export async function getUser(userId: string): Promise<UserRecord | null> {
 export async function saveUser(user: UserRecord): Promise<void> {
   const kv = await openKv();
   if (kv) {
-    await kv.set(["user", user.id], user);
+    await kv.set(kvKey("user", user.id), user);
     return;
   }
   const store = await readLocalStore();
@@ -87,7 +87,7 @@ export async function saveUser(user: UserRecord): Promise<void> {
 export async function findUserIdByCredential(credentialId: string): Promise<string | null> {
   const kv = await openKv();
   if (kv) {
-    const entry = await kv.get<string>(["cred", credentialId]);
+    const entry = await kv.get<string>(kvKey("cred", credentialId));
     return entry.value;
   }
   const store = await readLocalStore();
@@ -97,7 +97,7 @@ export async function findUserIdByCredential(credentialId: string): Promise<stri
 export async function indexCredential(credentialId: string, userId: string): Promise<void> {
   const kv = await openKv();
   if (kv) {
-    await kv.set(["cred", credentialId], userId);
+    await kv.set(kvKey("cred", credentialId), userId);
     return;
   }
   const store = await readLocalStore();
@@ -176,7 +176,7 @@ export async function createDeviceInvite(userId: string): Promise<DeviceInviteRe
   };
   const kv = await openKv();
   if (kv) {
-    await kv.set(["invite", invite.id], lookup);
+    await kv.set(kvKey("invite", invite.id), lookup);
   } else {
     const store = await readLocalStore();
     store.inviteIndex[invite.id] = lookup;
@@ -188,7 +188,7 @@ export async function createDeviceInvite(userId: string): Promise<DeviceInviteRe
 export async function getDeviceInvite(inviteId: string): Promise<InviteLookup | null> {
   const kv = await openKv();
   if (kv) {
-    const entry = await kv.get<InviteLookup>(["invite", inviteId]);
+    const entry = await kv.get<InviteLookup>(kvKey("invite", inviteId));
     return entry.value;
   }
   const store = await readLocalStore();
@@ -220,7 +220,7 @@ export async function claimDeviceInvite(
   const lookup: InviteLookup = { ...invite, claimedAt };
   const kv = await openKv();
   if (kv) {
-    await kv.set(["invite", inviteId], lookup);
+    await kv.set(kvKey("invite", inviteId), lookup);
   } else {
     const store = await readLocalStore();
     store.inviteIndex[inviteId] = lookup;
@@ -251,7 +251,7 @@ export async function createUserApiToken(
   const lookup: TokenLookup = { userId, tokenId: record.id };
   const kv = await openKv();
   if (kv) {
-    await kv.set(["apitoken", record.tokenHash], lookup);
+    await kv.set(kvKey("apitoken", record.tokenHash), lookup);
   } else {
     const store = await readLocalStore();
     store.tokenIndex[record.tokenHash] = lookup;
@@ -278,7 +278,7 @@ export async function revokeUserApiToken(
 
   const kv = await openKv();
   if (kv) {
-    await kv.delete(["apitoken", existing.tokenHash]);
+    await kv.delete(kvKey("apitoken", existing.tokenHash));
   } else {
     const store = await readLocalStore();
     delete store.tokenIndex[existing.tokenHash];
@@ -305,7 +305,7 @@ export async function revokeDeviceInvite(
 
   const kv = await openKv();
   if (kv) {
-    await kv.delete(["invite", inviteId]);
+    await kv.delete(kvKey("invite", inviteId));
   } else {
     const store = await readLocalStore();
     delete store.inviteIndex[inviteId];
@@ -324,16 +324,16 @@ export async function deleteUserAndData(
   const kv = await openKv();
   if (kv) {
     for (const passkey of user.passkeys) {
-      await kv.delete(["cred", passkey.credentialId]);
+      await kv.delete(kvKey("cred", passkey.credentialId));
     }
     for (const invite of user.deviceInvites) {
-      await kv.delete(["invite", invite.id]);
+      await kv.delete(kvKey("invite", invite.id));
     }
     for (const token of user.apiTokens) {
-      await kv.delete(["apitoken", token.tokenHash]);
+      await kv.delete(kvKey("apitoken", token.tokenHash));
     }
-    await kv.delete(["usage", userId]);
-    await kv.delete(["user", userId]);
+    await kv.delete(kvKey("usage", userId));
+    await kv.delete(kvKey("user", userId));
     return { ok: true };
   }
 
@@ -357,7 +357,7 @@ export async function resolveUserIdFromApiToken(token: string): Promise<string |
   const tokenHash = hashApiToken(token);
   const kv = await openKv();
   if (kv) {
-    const entry = await kv.get<TokenLookup>(["apitoken", tokenHash]);
+    const entry = await kv.get<TokenLookup>(kvKey("apitoken", tokenHash));
     return entry.value?.userId ?? null;
   }
   const store = await readLocalStore();
@@ -368,10 +368,10 @@ export async function resolveUserIdFromApiToken(token: string): Promise<string |
 export async function loadUserUsage(userId: string): Promise<UsageSubscriptionsDocument> {
   const kv = await openKv();
   if (kv) {
-    const entry = await kv.get<UsageSubscriptionsDocument>(["usage", userId]);
+    const entry = await kv.get<UsageSubscriptionsDocument>(kvKey("usage", userId));
     if (entry.value?.subscriptions?.length) return entry.value;
     const seed = structuredClone(defaultUsageSubscriptionsDocument);
-    await kv.set(["usage", userId], seed);
+    await kv.set(kvKey("usage", userId), seed);
     return seed;
   }
   const store = await readLocalStore();
@@ -389,7 +389,7 @@ export async function saveUserUsage(
 ): Promise<void> {
   const kv = await openKv();
   if (kv) {
-    await kv.set(["usage", userId], document);
+    await kv.set(kvKey("usage", userId), document);
     return;
   }
   const store = await readLocalStore();

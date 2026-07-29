@@ -73,4 +73,18 @@ node .output/server/index.mjs
 - `app/ui/` — shared document shell and pages
 - `public/` — static files
 
+## KV namespace migration
+
+Deno KV records use the `llm-usage` namespace (`llm-usage/user/<id>`,
+`llm-usage/cred/<credential-id>`, `llm-usage/invite/<invite-id>`,
+`llm-usage/apitoken/<hash>`, and `llm-usage/usage/<id>`). The local JSON fallback
+is unchanged.
+
+For an existing Deno KV database, set `LLM_USAGE_KV_MIGRATION_TOKEN` and make a
+single authenticated `POST /api/migrate-kv` request with that value in the
+`x-llm-usage-migration-token` header. The endpoint copies legacy top-level keys
+into the namespaced keys, skips targets that already exist, and records a
+completion marker. Legacy keys are retained as a rollback safety net. A repeat
+request returns `409` and does not copy anything.
+
 See `AGENTS.md` and `.agents/skills/remix/SKILL.md` for conventions.
