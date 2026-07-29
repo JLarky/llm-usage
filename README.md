@@ -25,6 +25,8 @@ KV shape (Deno KV or local `data/app-store.local.json`):
 - `["invite", inviteId]` → userId
 - `["apitoken", tokenHash]` → userId
 
+Deno deployments use the KV database selected by `DENO_KV_URL` instead. llm-usage stores all managed KV records below the `llm-usage` key namespace so it can share a production database with other applications without colliding with their records. The local JSON fallback remains unchanged.
+
 ### Update via API
 
 ```sh
