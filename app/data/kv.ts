@@ -6,7 +6,18 @@ export type DenoKv = {
   get: <T>(key: readonly string[]) => Promise<{ value: T | null }>;
   set: (key: readonly string[], value: unknown) => Promise<unknown>;
   delete: (key: readonly string[]) => Promise<unknown>;
+  list: <T>(selector: { prefix: readonly string[] }) => AsyncIterable<{
+    key: readonly string[];
+    value: T;
+  }>;
 };
+
+export const KV_NAMESPACE = "llm-usage";
+export const KV_MIGRATION_KEY = [KV_NAMESPACE, "migration", "legacy-v1"] as const;
+
+export function kvKey(...parts: string[]): readonly string[] {
+  return [KV_NAMESPACE, ...parts];
+}
 
 type DenoRuntime = {
   openKv: (url?: string) => Promise<DenoKv>;

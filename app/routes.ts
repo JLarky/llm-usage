@@ -8,6 +8,7 @@ export const routes = route({
   invite: "/invite/:inviteId",
   api: route("api", {
     usage: "usage",
+    migrateKv: post("migrate-kv"),
     auth: route("auth", {
       registerOptions: post("register/options"),
       registerVerify: post("register/verify"),

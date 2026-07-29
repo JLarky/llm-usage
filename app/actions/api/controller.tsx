@@ -6,6 +6,7 @@ import {
   sampleUsageDocument,
   saveUserUsage,
 } from "../../data/users.ts";
+import { migrateLegacyKv } from "../../data/kv-migration.ts";
 import { requireUserId } from "../../middleware/auth-session.ts";
 import { routes } from "../../routes.ts";
 import { jsonResponse, parseUsageSubscriptionsDocument } from "../../utils/usage-api.ts";
@@ -22,6 +23,19 @@ async function resolveUsageUserId(request: Request, session: { get(key: string):
 
 export default createController(routes.api, {
   actions: {
+    async migrateKv({ request }) {
+      const configuredToken = process.env.LLM_USAGE_KV_MIGRATION_TOKEN;
+      if (!configuredToken) return jsonResponse({ error: "Not Found" }, 404);
+
+      const suppliedToken = request.headers.get("x-llm-usage-migration-token");
+      if (suppliedToken !== configuredToken) {
+        return jsonResponse({ error: "Unauthorized" }, 401);
+      }
+
+      const result = await migrateLegacyKv();
+      if (!result) return jsonResponse({ error: "KV is not available" }, 503);
+      return jsonResponse(result, result.status === "already-complete" ? 409 : 200);
+    },
     async usage({ request, session }) {
       if (request.method === "GET") {
         const userId = await resolveUsageUserId(request, session);
