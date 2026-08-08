@@ -8,7 +8,7 @@ import { Document } from "./document.tsx";
 const FONT_STACK =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-const columns = ["Provider", "Used", "Total", "Cycle", "Resets at", "Id"] as const;
+const columns = ["Provider", "Used", "Total", "Cycle", "Resets at", "Id", "Action"] as const;
 
 export function AdminPage(
   handle: Handle<{
@@ -185,6 +185,15 @@ export function AdminPage(
                         >
                           {row.id}
                         </td>
+                        <td mix={tdStyle()}>
+                          <button
+                            type="submit"
+                            form={`delete-form-${row.id}`}
+                            mix={linkButtonStyle()}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -193,6 +202,156 @@ export function AdminPage(
               <button type="submit" mix={buttonStyle()}>
                 Save
               </button>
+            </form>
+            {subscriptions.map((row) => (
+              <form
+                key={`delete-form-${row.id}`}
+                id={`delete-form-${row.id}`}
+                method="POST"
+                action="/admin"
+              >
+                <input type="hidden" name="intent" value="delete-subscription" />
+                <input type="hidden" name="id" value={row.id} />
+              </form>
+            ))}
+          </section>
+
+          <section mix={sectionStyle()}>
+            <h2 mix={sectionTitleStyle()}>Add subscription</h2>
+            <form
+              method="POST"
+              action="/admin"
+              mix={css({ display: "flex", flexDirection: "column", gap: "12px" })}
+            >
+              <input type="hidden" name="intent" value="add-subscription" />
+              <div
+                mix={css({
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: "12px",
+                })}
+              >
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    ID
+                  </label>
+                  <input name="newId" placeholder="e.g. cursor" required mix={inputStyle()} />
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Emoji
+                  </label>
+                  <input name="newEmoji" defaultValue="🟢" required mix={inputStyle()} />
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Provider
+                  </label>
+                  <input name="newProvider" placeholder="e.g. Cursor" required mix={inputStyle()} />
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Used
+                  </label>
+                  <input
+                    name="newUsed"
+                    type="number"
+                    step="any"
+                    defaultValue="0"
+                    required
+                    mix={inputStyle()}
+                  />
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Total
+                  </label>
+                  <input
+                    name="newTotal"
+                    type="number"
+                    step="any"
+                    defaultValue="100"
+                    required
+                    mix={inputStyle()}
+                  />
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Cycle
+                  </label>
+                  <select name="newCycle" mix={inputStyle()}>
+                    <option value="weekly">weekly</option>
+                    <option value="monthly" selected>
+                      monthly
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    mix={css({
+                      display: "block",
+                      marginBottom: "4px",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                    })}
+                  >
+                    Resets at
+                  </label>
+                  <input
+                    name="newResetsAt"
+                    defaultValue={new Date().toISOString().slice(0, 19)}
+                    required
+                    mix={inputStyle()}
+                  />
+                </div>
+              </div>
+              <div>
+                <button type="submit" mix={buttonStyle()}>
+                  Add subscription
+                </button>
+              </div>
             </form>
           </section>
 

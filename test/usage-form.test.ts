@@ -8,6 +8,8 @@ import {
   hashApiToken,
   listPendingDeviceInvites,
   type UserRecord,
+  loadUserUsage,
+  saveUserUsage,
 } from "../app/data/users.ts";
 
 void test("parses admin usage form into subscriptions document", () => {
@@ -87,4 +89,87 @@ void test("lists only pending unexpired device invites", () => {
     pending.map((invite) => invite.id),
     ["a"],
   );
+});
+
+void test("deletes a subscription", async () => {
+  const userId = "test-delete-user";
+  const initialDocs = {
+    subscriptions: [
+      {
+        id: "sub1",
+        provider: "Sub 1",
+        emoji: "🟢",
+        used: 1,
+        total: 10,
+        cycle: "weekly" as const,
+        resetsAt: "2026-07-11T16:00:00",
+      },
+      {
+        id: "sub2",
+        provider: "Sub 2",
+        emoji: "🔵",
+        used: 2,
+        total: 10,
+        cycle: "monthly" as const,
+        resetsAt: "2026-07-11T16:00:00",
+      },
+    ],
+  };
+
+  await saveUserUsage(userId, initialDocs);
+  const loaded = await loadUserUsage(userId);
+  assert.equal(loaded.subscriptions.length, 2);
+
+  // simulate delete of "sub2"
+  const filtered = loaded.subscriptions.filter((sub) => sub.id !== "sub2");
+  await saveUserUsage(userId, { subscriptions: filtered });
+
+  const loadedAfter = await loadUserUsage(userId);
+  assert.equal(loadedAfter.subscriptions.length, 1);
+  assert.equal(loadedAfter.subscriptions[0]?.id, "sub1");
+});
+
+void test("adds a subscription", async () => {
+  const userId = "test-add-user";
+  const initialDocs = {
+    subscriptions: [
+      {
+        id: "sub1",
+        provider: "Sub 1",
+        emoji: "🟢",
+        used: 1,
+        total: 10,
+        cycle: "weekly" as const,
+        resetsAt: "2026-07-11T16:00:00",
+      },
+    ],
+  };
+
+  await saveUserUsage(userId, initialDocs);
+  const loaded = await loadUserUsage(userId);
+  assert.equal(loaded.subscriptions.length, 1);
+
+  // simulate adding a new valid subscription
+  const newSub = {
+    id: "sub-new",
+    provider: "New Sub",
+    emoji: "🟡",
+    used: 0,
+    total: 100,
+    cycle: "monthly" as const,
+    resetsAt: "2026-08-01T12:00:00",
+  };
+
+  const tempDocs = { subscriptions: [...loaded.subscriptions, newSub] };
+  const { parseUsageSubscriptionsDocument } = await import("../app/utils/usage-api.ts");
+  const parsed = parseUsageSubscriptionsDocument(tempDocs);
+  assert.equal(parsed.ok, true);
+
+  if (parsed.ok) {
+    await saveUserUsage(userId, parsed.value);
+  }
+
+  const loadedAfter = await loadUserUsage(userId);
+  assert.equal(loadedAfter.subscriptions.length, 2);
+  assert.equal(loadedAfter.subscriptions[1]?.id, "sub-new");
 });

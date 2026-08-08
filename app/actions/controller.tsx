@@ -41,6 +41,8 @@ function withQuery(href: string, params: Record<string, string | null | undefine
 
 function adminNotice(url: URL): string | null {
   if (url.searchParams.get("saved") === "1") return "Saved usage subscriptions.";
+  if (url.searchParams.get("deletedSub") === "1") return "Subscription deleted.";
+  if (url.searchParams.get("addedSub") === "1") return "Subscription added.";
   const invite = url.searchParams.get("deviceInvite");
   if (invite) {
     return `Device invite ready. Share this link once: /invite/${invite}`;
@@ -250,6 +252,90 @@ export default createController(routes, {
         context.session.unset("userId");
         context.session.regenerateId();
         return redirect(routes.home.href());
+      }
+
+      if (intent === "delete-subscription") {
+        const subId = textField(formData, "id");
+        if (document.subscriptions.length <= 1) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error="Cannot delete the only remaining subscription. At least one must exist."
+              notice={null}
+              createdToken={null}
+              confirmDelete={false}
+            />,
+            { status: 400 },
+          );
+        }
+        const filtered = document.subscriptions.filter((sub) => sub.id !== subId);
+        await saveUserUsage(userId, { subscriptions: filtered });
+        return redirect(`${routes.admin.href()}?deletedSub=1`);
+      }
+
+      if (intent === "add-subscription") {
+        const id = textField(formData, "newId").trim();
+        const emoji = textField(formData, "newEmoji").trim();
+        const provider = textField(formData, "newProvider").trim();
+        const used = Number(textField(formData, "newUsed"));
+        const total = Number(textField(formData, "newTotal"));
+        const cycle = textField(formData, "newCycle").trim() as any;
+        const resetsAt = textField(formData, "newResetsAt").trim();
+
+        if (!id || !provider || !resetsAt) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error="ID, Provider, and Resets at are required fields."
+              notice={null}
+              createdToken={null}
+              confirmDelete={false}
+            />,
+            { status: 400 },
+          );
+        }
+
+        if (document.subscriptions.some((sub) => sub.id === id)) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error={`A subscription with ID "${id}" already exists.`}
+              notice={null}
+              createdToken={null}
+              confirmDelete={false}
+            />,
+            { status: 400 },
+          );
+        }
+
+        // Validate utilizing parseUsageSubscriptionsDocument
+        const newSub = { id, provider, emoji, used, total, cycle, resetsAt };
+        const tempDocs = { subscriptions: [...document.subscriptions, newSub] };
+        const { parseUsageSubscriptionsDocument } = await import("../utils/usage-api.ts");
+        const parsed = parseUsageSubscriptionsDocument(tempDocs);
+        if (!parsed.ok) {
+          return context.render(
+            <AdminPage
+              user={user}
+              pendingInvites={listPendingDeviceInvites(user)}
+              subscriptions={document.subscriptions}
+              error={parsed.error}
+              notice={null}
+              createdToken={null}
+              confirmDelete={false}
+            />,
+            { status: 400 },
+          );
+        }
+
+        await saveUserUsage(userId, parsed.value);
+        return redirect(`${routes.admin.href()}?addedSub=1`);
       }
 
       const parsed = parseUsageSubscriptionsForm(formData);
