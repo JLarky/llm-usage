@@ -9,6 +9,7 @@ import {
 import { requireUserId } from "../../middleware/auth-session.ts";
 import { routes } from "../../routes.ts";
 import { jsonResponse, parseUsageSubscriptionsDocument } from "../../utils/usage-api.ts";
+import { buildUsagePlanDocument, parseHorizon, parsePlanNow } from "../../utils/usage-budget.ts";
 
 async function resolveUsageUserId(request: Request, session: { get(key: string): unknown }) {
   const header = request.headers.get("authorization");
@@ -50,6 +51,17 @@ export default createController(routes.api, {
 
       await saveUserUsage(userId, parsed.value);
       return jsonResponse({ ok: true, subscriptions: parsed.value.subscriptions.length });
+    },
+
+    async usagePlan({ request, session }) {
+      const userId = await resolveUsageUserId(request, session);
+      if (!userId) return jsonResponse({ error: "Unauthorized" }, 401);
+
+      const url = new URL(request.url);
+      const now = parsePlanNow(url.searchParams.get("at")) ?? new Date();
+      const horizon = parseHorizon(url.searchParams.get("horizon"));
+      const document = await loadUserUsage(userId);
+      return jsonResponse(buildUsagePlanDocument(document, now, horizon));
     },
   },
 });

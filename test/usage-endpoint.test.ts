@@ -41,6 +41,11 @@ void test("api controller is wired for usage route", () => {
   assert.equal(routes.api.usage.method, "ANY");
 });
 
+void test("usage plan route is GET /api/usage/plan", () => {
+  assert.equal(routes.api.usagePlan.method, "GET");
+  assert.equal(routes.api.usagePlan.href(), "/api/usage/plan");
+});
+
 void test("sample document type matches UsageSubscriptionsDocument", () => {
   const body: UsageSubscriptionsDocument = sampleUsageDocument();
   assert.ok(body.subscriptions.length > 0);

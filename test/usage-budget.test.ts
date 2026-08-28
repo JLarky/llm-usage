@@ -4,10 +4,12 @@ import test from "node:test";
 import { defaultUsageSubscriptionsDocument } from "../app/data/usage-defaults.ts";
 import {
   aggressiveBudget,
+  buildUsagePlanDocument,
   buildUsagePlanRows,
   conservativeBudget,
   daysUntilReset,
   nextResetWindow,
+  parseHorizon,
 } from "../app/utils/usage-budget.ts";
 import { toUsageSubscriptionView, usedPercent } from "../app/utils/usage-subscription-view.ts";
 
@@ -91,4 +93,63 @@ void test("sorts under-budget providers before overage and depleted", () => {
   );
   assert.equal(rows[0]?.subscription.id, "cursor");
   assert.equal(rows.at(-1)?.subscription.id, "enterprise-codex");
+});
+
+void test("plan JSON exposes conservative daily cap for weekly Codex", () => {
+  const now = new Date("2026-08-28T16:26:00.000Z");
+  const plan = buildUsagePlanDocument(
+    {
+      subscriptions: [
+        {
+          id: "chatgpt-codex",
+          provider: "My Codex",
+          emoji: "🟣",
+          used: 6,
+          total: 100,
+          cycle: "weekly",
+          resetsAt: "2026-09-03T16:26:56.000Z",
+        },
+      ],
+    },
+    now,
+    parseHorizon(null),
+  );
+
+  assert.equal(plan.horizon, "cycle");
+  assert.equal(plan.now, now.toISOString());
+  assert.equal(plan.subscriptions.length, 1);
+  const codex = plan.subscriptions[0];
+  assert.ok(codex);
+  assert.equal(codex.id, "chatgpt-codex");
+  assert.equal(codex.usedPercent, 6);
+  assert.equal(codex.conservative, "6% → 14%");
+  assert.ok(codex.conservativeTarget != null);
+  assert.equal(Math.round(codex.conservativeTarget), 14);
+  assert.match(codex.budgetPerDay, /^14\.3%/);
+});
+
+void test("plan JSON matches homepage rows field-for-field", () => {
+  const now = snapshot;
+  const horizon = parseHorizon("cycle");
+  const views = defaultUsageSubscriptionsDocument.subscriptions.map(toUsageSubscriptionView);
+  const rows = buildUsagePlanRows(views, now, horizon);
+  const plan = buildUsagePlanDocument(defaultUsageSubscriptionsDocument, now, horizon);
+
+  assert.equal(plan.subscriptions.length, rows.length);
+  for (const [index, row] of rows.entries()) {
+    const json = plan.subscriptions[index];
+    assert.ok(json);
+    assert.equal(json.id, row.subscription.id);
+    assert.equal(json.provider, row.subscription.provider);
+    assert.equal(json.conservative, row.conservative);
+    assert.equal(json.conservativeTarget, row.conservativeTarget);
+    assert.equal(json.aggressive, row.aggressive);
+    assert.equal(json.aggressiveTarget, row.aggressiveTarget);
+    assert.equal(json.budgetPerDay, row.budgetPerDay);
+    assert.equal(json.daysLeft, row.daysLeft);
+    assert.equal(json.usedPercent, row.usedPercent);
+    assert.equal(json.reportedUsage, row.subscription.reportedUsage);
+    assert.equal(json.timeElapsedPercent, row.timeElapsedPercent);
+    assert.equal(json.timeElapsedLabel, row.timeElapsedLabel);
+  }
 });
