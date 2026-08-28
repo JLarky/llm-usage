@@ -1,4 +1,4 @@
-import { post, route } from "remix/routes";
+import { get, post, route } from "remix/routes";
 
 export const routes = route({
   home: "/",
@@ -8,6 +8,7 @@ export const routes = route({
   invite: "/invite/:inviteId",
   api: route("api", {
     usage: "usage",
+    usagePlan: get("usage/plan"),
     auth: route("auth", {
       registerOptions: post("register/options"),
       registerVerify: post("register/verify"),

@@ -38,6 +38,15 @@ curl -X POST https://llm-usage.jlarky.deno.net/api/usage \
 
 Anonymous `GET /api/usage` returns sample data. Authenticated GET/POST are scoped to that user.
 
+### Plan via API
+
+`GET /api/usage/plan` returns the same conservative / aggressive / budget-per-day numbers as the signed-in home table. **Requires** a personal API token or session (401 without). Optional query: `horizon=cycle|day|hour`, `at=<ISO timestamp>`.
+
+```sh
+curl -sS 'https://llm-usage.jlarky.deno.net/api/usage/plan' \
+  -H 'authorization: Bearer <personal-api-token>'
+```
+
 ### WebAuthn env
 
 - RP ID is the **exact request hostname** (e.g. `llm-usage.jlarky.deno.net`). Do **not** set `WEBAUTHN_RP_ID=jlarky.deno.net` — `deno.net` is a public suffix, and a parent RP ID makes browsers offer QR / security keys instead of Touch ID.

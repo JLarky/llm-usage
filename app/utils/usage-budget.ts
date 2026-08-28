@@ -1,5 +1,5 @@
-import type { UsageCycle } from "../data/usage-types.ts";
-import type { UsageSubscriptionView } from "./usage-subscription-view.ts";
+import type { UsageCycle, UsageSubscriptionsDocument } from "../data/usage-types.ts";
+import { toUsageSubscriptionView, type UsageSubscriptionView } from "./usage-subscription-view.ts";
 
 export type TimeHorizon = "cycle" | "day" | "hour";
 
@@ -384,4 +384,76 @@ export function buildUsagePlanRows(
       (a, b) =>
         a.sortKey - b.sortKey || a.subscription.provider.localeCompare(b.subscription.provider),
     );
+}
+
+export type UsagePlanSubscriptionJson = {
+  id: string;
+  provider: string;
+  emoji: string;
+  used: number;
+  total: number;
+  usedPercent: number;
+  cycle: UsageCycle;
+  resetsAt: string;
+  conservative: string;
+  conservativeTarget: number | null;
+  aggressive: string;
+  aggressiveTarget: number | null;
+  budgetPerDay: string;
+  daysLeft: string;
+  timeElapsedPercent: number;
+  timeElapsedLabel: string;
+  reportedUsage: string;
+};
+
+export type UsagePlanDocument = {
+  now: string;
+  horizon: TimeHorizon;
+  subscriptions: UsagePlanSubscriptionJson[];
+};
+
+export function parseHorizon(value: string | null): TimeHorizon {
+  return value === "day" || value === "hour" ? value : "cycle";
+}
+
+export function parsePlanNow(value: string | null): Date | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms);
+}
+
+export function buildUsagePlanDocument(
+  document: UsageSubscriptionsDocument,
+  now = new Date(),
+  horizon: TimeHorizon = "cycle",
+): UsagePlanDocument {
+  const rows = buildUsagePlanRows(
+    document.subscriptions.map(toUsageSubscriptionView),
+    now,
+    horizon,
+  );
+  return {
+    now: now.toISOString(),
+    horizon,
+    subscriptions: rows.map((row) => ({
+      id: row.subscription.id,
+      provider: row.subscription.provider,
+      emoji: row.subscription.emoji,
+      used: row.subscription.used,
+      total: row.subscription.total,
+      usedPercent: row.usedPercent,
+      cycle: row.subscription.cycle,
+      resetsAt: row.subscription.resetsAt,
+      conservative: row.conservative,
+      conservativeTarget: row.conservativeTarget,
+      aggressive: row.aggressive,
+      aggressiveTarget: row.aggressiveTarget,
+      budgetPerDay: row.budgetPerDay,
+      daysLeft: row.daysLeft,
+      timeElapsedPercent: row.timeElapsedPercent,
+      timeElapsedLabel: row.timeElapsedLabel,
+      reportedUsage: row.subscription.reportedUsage,
+    })),
+  };
 }

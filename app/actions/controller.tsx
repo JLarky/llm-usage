@@ -21,8 +21,7 @@ import { AdminPage } from "../ui/admin-page.tsx";
 import { HomePage } from "../ui/home-page.tsx";
 import { InvitePage } from "../ui/invite-page.tsx";
 import { LoginPage } from "../ui/login-page.tsx";
-import type { TimeHorizon } from "../utils/usage-budget.ts";
-import { buildUsagePlanRows, parseTimeShift } from "../utils/usage-budget.ts";
+import { buildUsagePlanRows, parseHorizon, parseTimeShift } from "../utils/usage-budget.ts";
 import { toUsageSubscriptionView } from "../utils/usage-subscription-view.ts";
 
 function textField(formData: FormData, name: string): string {
@@ -58,9 +57,7 @@ export default createController(routes, {
   actions: {
     async home(context) {
       const url = new URL(context.request.url);
-      const horizonParam = url.searchParams.get("horizon");
-      const horizon: TimeHorizon =
-        horizonParam === "day" || horizonParam === "hour" ? horizonParam : "cycle";
+      const horizon = parseHorizon(url.searchParams.get("horizon"));
       const shiftMs = parseTimeShift(url.searchParams.get("shift"));
       const now = new Date(Date.now() + shiftMs);
       const userId = requireUserId(context.session);
