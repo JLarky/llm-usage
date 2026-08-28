@@ -428,6 +428,8 @@ export function buildUsagePlanDocument(
   now = new Date(),
   horizon: TimeHorizon = "cycle",
 ): UsagePlanDocument {
+  // Keep this a pure projection of homepage rows. HomePage renders
+  // UsagePlanRow fields; this JSON must copy those same strings/numbers.
   const rows = buildUsagePlanRows(
     document.subscriptions.map(toUsageSubscriptionView),
     now,

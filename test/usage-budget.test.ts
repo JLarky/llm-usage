@@ -127,3 +127,29 @@ void test("plan JSON exposes conservative daily cap for weekly Codex", () => {
   assert.equal(Math.round(codex.conservativeTarget), 14);
   assert.match(codex.budgetPerDay, /^14\.3%/);
 });
+
+void test("plan JSON matches homepage rows field-for-field", () => {
+  const now = snapshot;
+  const horizon = parseHorizon("cycle");
+  const views = defaultUsageSubscriptionsDocument.subscriptions.map(toUsageSubscriptionView);
+  const rows = buildUsagePlanRows(views, now, horizon);
+  const plan = buildUsagePlanDocument(defaultUsageSubscriptionsDocument, now, horizon);
+
+  assert.equal(plan.subscriptions.length, rows.length);
+  for (const [index, row] of rows.entries()) {
+    const json = plan.subscriptions[index];
+    assert.ok(json);
+    assert.equal(json.id, row.subscription.id);
+    assert.equal(json.provider, row.subscription.provider);
+    assert.equal(json.conservative, row.conservative);
+    assert.equal(json.conservativeTarget, row.conservativeTarget);
+    assert.equal(json.aggressive, row.aggressive);
+    assert.equal(json.aggressiveTarget, row.aggressiveTarget);
+    assert.equal(json.budgetPerDay, row.budgetPerDay);
+    assert.equal(json.daysLeft, row.daysLeft);
+    assert.equal(json.usedPercent, row.usedPercent);
+    assert.equal(json.reportedUsage, row.subscription.reportedUsage);
+    assert.equal(json.timeElapsedPercent, row.timeElapsedPercent);
+    assert.equal(json.timeElapsedLabel, row.timeElapsedLabel);
+  }
+});
